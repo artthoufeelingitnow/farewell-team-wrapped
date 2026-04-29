@@ -1,0 +1,34 @@
+node_modules
+dist
+*.log
+.DS_Store
+
+# TypeScript incremental build cache
+*.tsbuildinfo
+
+# Claude Code personal/local settings (deny rules in settings.json stay)
+.claude/settings.local.json
+
+# Original single-file backup
+index.original.html
+
+# Real content stays out of the repo (public repo = browseable source)
+data.json
+public/data.json
+
+# Patterns from claudeignore
+exports/
+secrets/
+drafts/
+private/
+photos-raw/
+*.bak
+*-backup.html
+*-old.html
+*.private.md
+*.heic
+*.cr2
+*.raw
+*.swp
+.vscode/settings.json
+goodbye-wrapped-export-*.html

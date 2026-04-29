@@ -1,0 +1,33 @@
+# Build artifacts and dependency stuff (none right now, but future-proofing)
+node_modules/
+dist/
+build/
+*.log
+
+# OS / editor noise
+.DS_Store
+Thumbs.db
+*.swp
+.vscode/settings.json
+
+# Exported files — Claude should work on the source, not the build outputs
+goodbye-wrapped-export-*.html
+exports/
+
+# Backups Michael might keep
+*.bak
+*-backup.html
+*-old.html
+
+# Anything secret (passwords, draft letters not yet ready, etc.)
+secrets/
+drafts/
+private/
+*.private.md
+
+# Photos folder — usually large, Claude doesn't need to read raw images
+# (they're already base64'd into the HTML when used)
+photos-raw/
+*.heic
+*.cr2
+*.raw
