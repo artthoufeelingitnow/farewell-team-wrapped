@@ -14,7 +14,10 @@ export function useDataJsonLoader() {
 
   useEffect(() => {
     let cancelled = false;
-    fetch('data.json', { cache: 'no-store' })
+    // Use Vite's BASE_URL so this resolves correctly under GitHub Pages' subpath
+    // (/farewell-team-wrapped/) regardless of whether the user lands with or without
+    // the trailing slash.
+    fetch(`${import.meta.env.BASE_URL}data.json`, { cache: 'no-store' })
       .then((res) => {
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         return res.json() as Promise<AppData>;
