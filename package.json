@@ -7,7 +7,9 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
-    "typecheck": "tsc -b --noEmit"
+    "typecheck": "tsc -b --noEmit",
+    "encrypt-data": "openssl enc -aes-256-cbc -pbkdf2 -iter 600000 -salt -in data.json -out data.json.enc",
+    "decrypt-data": "openssl enc -d -aes-256-cbc -pbkdf2 -iter 600000 -in data.json.enc -out data.json"
   },
   "dependencies": {
     "react": "^19.0.0",
