@@ -134,6 +134,7 @@ export function ColleagueEditor({ colleague }: Props) {
           <SlideEditor
             key={i}
             slide={s}
+            colleague={colleague}
             index={i}
             isFirst={i === 0}
             isLast={i === slides.length - 1}

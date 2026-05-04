@@ -11,18 +11,18 @@ export function SlideFieldsEditor({ slide, onPatch }: Props) {
     case 'intro':
       return (
         <div className="slide-fields">
-          <Field label="Eyebrow" value={slide.eyebrow ?? ''} placeholder="For [name]" onChange={(v) => onPatch({ eyebrow: v })} />
-          <Field label="Title" value={slide.title ?? ''} placeholder="A wrapped, just for you" onChange={(v) => onPatch({ title: v })} />
-          <Field label="Subtitle" value={slide.sub ?? ''} placeholder="A short opening line" onChange={(v) => onPatch({ sub: v })} type="textarea" full />
+          <Field label="Eyebrow" value={slide.eyebrow ?? ''} placeholder="for [name]" onChange={(v) => onPatch({ eyebrow: v })} />
+          <Field label="Title" value={slide.title ?? ''} placeholder="a wrapped, just for you" onChange={(v) => onPatch({ title: v })} />
+          <Field label="Subtitle" value={slide.sub ?? ''} placeholder="a short opening line" onChange={(v) => onPatch({ sub: v })} type="textarea" full />
         </div>
       );
     case 'stat':
       return (
         <div className="slide-fields">
-          <Field label="Eyebrow" value={slide.eyebrow ?? ''} placeholder="Together we..." onChange={(v) => onPatch({ eyebrow: v })} />
-          <Field label="Big number/text" value={slide.bigNumber ?? ''} placeholder='e.g. 247 or "infinite"' onChange={(v) => onPatch({ bigNumber: v })} />
-          <Field label="Label below number" value={slide.label ?? ''} placeholder="lessons taught" onChange={(v) => onPatch({ label: v })} />
-          <Field label="Caption" value={slide.sub ?? ''} placeholder="Optional context" onChange={(v) => onPatch({ sub: v })} type="textarea" full />
+          <Field label="Eyebrow" value={slide.eyebrow ?? ''} placeholder="so, this is the amount of times..." onChange={(v) => onPatch({ eyebrow: v })} />
+          <Field label="Big number/text" value={slide.bigNumber ?? ''} placeholder='e.g. 24/7 or "infinite"' onChange={(v) => onPatch({ bigNumber: v })} />
+          <Field label="Label below number" value={slide.label ?? ''} placeholder="something" onChange={(v) => onPatch({ label: v })} />
+          <Field label="Caption" value={slide.sub ?? ''} placeholder="some other context if needed haha" onChange={(v) => onPatch({ sub: v })} type="textarea" full />
         </div>
       );
     case 'photo':
@@ -31,8 +31,8 @@ export function SlideFieldsEditor({ slide, onPatch }: Props) {
       return (
         <div className="slide-fields">
           <Field label="Eyebrow" value={slide.eyebrow ?? ''} placeholder="Optional" onChange={(v) => onPatch({ eyebrow: v })} />
-          <Field label="Quote" value={slide.body ?? ''} placeholder="You always said..." onChange={(v) => onPatch({ body: v })} type="textarea" full />
-          <Field label="Attribution" value={slide.attrib ?? ''} placeholder="— Marcus, probably" onChange={(v) => onPatch({ attrib: v })} />
+          <Field label="Quote" value={slide.body ?? ''} placeholder="you always said this..." onChange={(v) => onPatch({ body: v })} type="textarea" full />
+          <Field label="Attribution" value={slide.attrib ?? ''} placeholder="— Bobby, probably" onChange={(v) => onPatch({ attrib: v })} />
         </div>
       );
     case 'podium':
@@ -40,9 +40,9 @@ export function SlideFieldsEditor({ slide, onPatch }: Props) {
     case 'letter':
       return (
         <div className="slide-fields">
-          <Field label="Greeting" value={slide.greeting ?? ''} placeholder="LS," onChange={(v) => onPatch({ greeting: v })} />
-          <Field label="Letter body" value={slide.body ?? ''} placeholder="Working with you has..." onChange={(v) => onPatch({ body: v })} type="textarea" full />
-          <Field label="Sign off" value={slide.signoff ?? ''} placeholder="— Michael" onChange={(v) => onPatch({ signoff: v })} />
+          <Field label="Greeting" value={slide.greeting ?? ''} placeholder="greetings," onChange={(v) => onPatch({ greeting: v })} />
+          <Field label="Letter body" value={slide.body ?? ''} placeholder="insert long, emotional message" onChange={(v) => onPatch({ body: v })} type="textarea" full />
+          <Field label="Sign off" value={slide.signoff ?? ''} placeholder="— mic" onChange={(v) => onPatch({ signoff: v })} />
         </div>
       );
     case 'mosaic':
@@ -50,9 +50,9 @@ export function SlideFieldsEditor({ slide, onPatch }: Props) {
     case 'signoff':
       return (
         <div className="slide-fields">
-          <Field label="Eyebrow" value={slide.eyebrow ?? ''} placeholder="Until next time" onChange={(v) => onPatch({ eyebrow: v })} />
-          <Field label="Title" value={slide.title ?? ''} placeholder="Thank you" onChange={(v) => onPatch({ title: v })} />
-          <Field label="Subtitle" value={slide.sub ?? ''} placeholder="Stay in touch." onChange={(v) => onPatch({ sub: v })} type="textarea" full />
+          <Field label="Eyebrow" value={slide.eyebrow ?? ''} placeholder="until next time" onChange={(v) => onPatch({ eyebrow: v })} />
+          <Field label="Title" value={slide.title ?? ''} placeholder="thank you" onChange={(v) => onPatch({ title: v })} />
+          <Field label="Subtitle" value={slide.sub ?? ''} placeholder="have a good life." onChange={(v) => onPatch({ sub: v })} type="textarea" full />
         </div>
       );
   }
@@ -110,8 +110,8 @@ function PhotoFields({ slide, onPatch }: { slide: PhotoSlide; onPatch: (patch: P
           {slide.photoData ? '🔁 Replace photo' : '📷 Upload photo'}
         </label>
       </div>
-      <Field label="Eyebrow" value={slide.eyebrow ?? ''} placeholder="A moment" onChange={(v) => onPatch({ eyebrow: v })} />
-      <Field label="Caption (under photo)" value={slide.caption ?? ''} placeholder="That time we..." onChange={(v) => onPatch({ caption: v })} />
+      <Field label="Eyebrow" value={slide.eyebrow ?? ''} placeholder="a moment in time" onChange={(v) => onPatch({ eyebrow: v })} />
+      <Field label="Caption (under photo)" value={slide.caption ?? ''} placeholder="that time when..." onChange={(v) => onPatch({ caption: v })} />
       <Field label="Subtitle below" value={slide.sub ?? ''} placeholder="Optional" onChange={(v) => onPatch({ sub: v })} />
     </div>
   );
@@ -133,8 +133,8 @@ function PodiumFields({ slide, onPatch }: { slide: PodiumSlide; onPatch: (patch:
 
   return (
     <div className="slide-fields">
-      <Field label="Eyebrow" value={slide.eyebrow ?? ''} placeholder="The top 3..." onChange={(v) => onPatch({ eyebrow: v })} />
-      <Field label="Title" value={slide.title ?? ''} placeholder="Things I'll miss most" onChange={(v) => onPatch({ title: v })} />
+      <Field label="Eyebrow" value={slide.eyebrow ?? ''} placeholder="the top 3..." onChange={(v) => onPatch({ eyebrow: v })} />
+      <Field label="Title" value={slide.title ?? ''} placeholder="things or whatever..." onChange={(v) => onPatch({ title: v })} />
       {[0, 1, 2].map((i) => (
         <div key={i} style={{ display: 'contents' }}>
           <div>
@@ -216,8 +216,8 @@ function MosaicFields({ slide, onPatch }: { slide: MosaicSlide; onPatch: (patch:
           📷 Add photos (up to 9)
         </label>
       </div>
-      <Field label="Eyebrow" value={slide.eyebrow ?? ''} placeholder="Memories" onChange={(v) => onPatch({ eyebrow: v })} />
-      <Field label="Title" value={slide.title ?? ''} placeholder="Bits and pieces" onChange={(v) => onPatch({ title: v })} />
+      <Field label="Eyebrow" value={slide.eyebrow ?? ''} placeholder="some pics or stuff" onChange={(v) => onPatch({ eyebrow: v })} />
+      <Field label="Title" value={slide.title ?? ''} placeholder="here are the pics" onChange={(v) => onPatch({ title: v })} />
       <Field label="Caption" value={slide.sub ?? ''} placeholder="Optional" onChange={(v) => onPatch({ sub: v })} />
     </div>
   );

@@ -1621,3 +1621,31 @@
     background: rgba(0,0,0,0.8);
     transform: translate(-50%, -50%) scale(1.08);
   }
+
+  /* ============================================================
+     ADMIN — live slide preview thumbnail (above each slide editor)
+     ============================================================ */
+  .slide-preview {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    border-radius: 10px;
+    overflow: hidden;
+    pointer-events: none;
+    margin-bottom: 14px;
+    background: #000;
+    border: 1px solid rgba(255,255,255,0.08);
+  }
+  /* Stage size + transform are set inline by SlidePreview via a ResizeObserver
+     that measures the wrapper width and computes scale = width / 1200. */
+  .slide-preview-stage {
+    position: absolute;
+    top: 0;
+    left: 0;
+    transform-origin: top left;
+  }
+  /* Disable slide-in animation in the preview so the thumb doesn't pulse on
+     every keystroke (the rerender would re-run it). */
+  .slide-preview-stage .slide { animation: none; }
+  /* Hide replay/close buttons on the signoff slide preview — they're player-only */
+  .slide-preview-stage .end-actions { display: none; }

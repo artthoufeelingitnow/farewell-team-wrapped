@@ -1,11 +1,13 @@
-import type { Slide } from '../../types';
+import type { Slide, Colleague } from '../../types';
 import { SLIDE_TYPES } from '../../utils/constants';
 import { SlideFieldsEditor } from './SlideFieldsEditor';
 import { SlideStyleEditor } from './SlideStyleEditor';
+import { SlidePreview } from './SlidePreview';
 import { SongPicker } from './SongPicker';
 
 interface Props {
   slide: Slide;
+  colleague: Colleague;
   index: number;
   isFirst: boolean;
   isLast: boolean;
@@ -14,7 +16,7 @@ interface Props {
   onDelete: () => void;
 }
 
-export function SlideEditor({ slide, index, isFirst, isLast, onPatch, onMove, onDelete }: Props) {
+export function SlideEditor({ slide, colleague, index, isFirst, isLast, onPatch, onMove, onDelete }: Props) {
   const t = SLIDE_TYPES[slide.type];
 
   return (
@@ -63,6 +65,7 @@ export function SlideEditor({ slide, index, isFirst, isLast, onPatch, onMove, on
         </div>
       </div>
 
+      <SlidePreview slide={slide} colleague={colleague} />
       <SlideStyleEditor slide={slide} onPatch={onPatch} />
       <SlideFieldsEditor slide={slide} onPatch={onPatch} />
       <SongPicker slide={slide} slideIndex={index} onPatch={onPatch} />
