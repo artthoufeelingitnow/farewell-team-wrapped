@@ -722,6 +722,8 @@
     animation: photo-float 4.5s ease-in-out infinite;
     transition: filter 180ms ease, box-shadow 180ms ease;
     filter: brightness(1);
+    /* Skip the 300ms iOS double-tap zoom delay so taps register instantly */
+    touch-action: manipulation;
   }
   .photo-mosaic img:nth-child(2n) { animation-delay: -1s; }
   .photo-mosaic img:nth-child(3n) { animation-delay: -2s; }
@@ -730,6 +732,11 @@
   .photo-mosaic img:hover {
     filter: brightness(1.15);
     box-shadow: 0 6px 18px rgba(0,0,0,0.5), 0 0 0 2px rgba(255,255,255,0.35);
+  }
+
+  /* On touch devices the float animation makes photos a moving target — disable it */
+  @media (pointer: coarse) {
+    .photo-mosaic img { animation: none; }
   }
 
   @keyframes photo-float {
@@ -753,7 +760,7 @@
   }
   .photo-lightbox img {
     max-width: 92vw;
-    max-height: 92vh;
+    max-height: 86vh; /* leave room below for the 10px gap + hint text */
     object-fit: contain;
     border-radius: 12px;
     box-shadow: 0 12px 48px rgba(0, 0, 0, 0.6);
@@ -763,22 +770,14 @@
     touch-action: none;
     user-select: none;
   }
-  .photo-lightbox-grip {
-    position: absolute;
-    top: 12px;
-    left: 50%;
-    transform: translateX(-50%);
-    width: 48px;
-    height: 5px;
-    border-radius: 999px;
-    background: rgba(255, 255, 255, 0.45);
-    pointer-events: none;
+  .photo-lightbox-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    max-width: 100%;
   }
   .photo-lightbox-hint {
-    position: absolute;
-    bottom: 24px;
-    left: 50%;
-    transform: translateX(-50%);
     color: rgba(255, 255, 255, 0.55);
     font-size: 13px;
     letter-spacing: 0.4px;

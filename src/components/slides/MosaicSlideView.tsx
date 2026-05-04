@@ -111,18 +111,17 @@ export function MosaicSlideView({ slide }: { slide: MosaicSlide }) {
               : undefined,
           }}
         >
-          <div className="photo-lightbox-grip" aria-hidden="true" />
-          <img
-            src={expandedSrc}
-            alt=""
+          <div
+            className="photo-lightbox-content"
             style={{
               transform: dragY > 0 ? `translateY(${dragY}px)` : undefined,
               opacity: dragY > 0 ? Math.max(0.5, 1 - dragY / 300) : 1,
               transition: dragging ? 'none' : 'transform 0.2s ease, opacity 0.2s ease',
             }}
-            draggable={false}
-          />
-          <div className="photo-lightbox-hint">Swipe down or tap to close</div>
+          >
+            <img src={expandedSrc} alt="" draggable={false} />
+            <div className="photo-lightbox-hint">Swipe down or tap to close</div>
+          </div>
         </div>
       )}
     </>
