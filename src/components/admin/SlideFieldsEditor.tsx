@@ -1,4 +1,4 @@
-import type { Slide, PodiumSlide, MosaicSlide, PhotoSlide } from '../../types';
+import type { Slide, PodiumSlide, MosaicSlide, PhotoSlide, MediaItem } from '../../types';
 import { readFileAsDataURL, compressImage } from '../../utils';
 
 interface Props {
@@ -165,30 +165,40 @@ function PodiumFields({ slide, onPatch }: { slide: PodiumSlide; onPatch: (patch:
 }
 
 function MosaicFields({ slide, onPatch }: { slide: MosaicSlide; onPatch: (patch: Partial<Slide>) => void }) {
-  const photos = slide.photos ?? [];
+  const media = slide.media ?? [];
 
-  const handleAdd = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleAddPhotos = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files ?? []);
-    const next = [...photos];
+    const next: MediaItem[] = [...media];
     for (const f of files) {
       if (next.length >= 9) break;
       const dataUrl = await readFileAsDataURL(f);
       const compressed = await compressImage(dataUrl, 700);
-      next.push(compressed);
+      next.push({ kind: 'image', src: compressed });
     }
-    onPatch({ photos: next });
-    // Allow re-uploading same file
+    onPatch({ media: next });
     e.target.value = '';
   };
 
+  const handleAddVideo = () => {
+    if (media.length >= 9) return;
+    const url = prompt(
+      'Paste video URL (e.g. https://artthoufeelingitnow.github.io/farewell-team-wrapped/videos/clip.mp4):',
+    );
+    if (!url) return;
+    const trimmed = url.trim();
+    if (!trimmed) return;
+    onPatch({ media: [...media, { kind: 'video', src: trimmed }] });
+  };
+
   const handleRemove = (idx: number) => {
-    onPatch({ photos: photos.filter((_, i) => i !== idx) });
+    onPatch({ media: media.filter((_, i) => i !== idx) });
   };
 
   return (
     <div className="slide-fields">
       <div className="full">
-        {photos.length > 0 && (
+        {media.length > 0 && (
           <div
             style={{
               display: 'grid',
@@ -197,9 +207,32 @@ function MosaicFields({ slide, onPatch }: { slide: MosaicSlide; onPatch: (patch:
               marginBottom: '8px',
             }}
           >
-            {photos.map((p, pi) => (
+            {media.map((m, pi) => (
               <div key={pi} style={{ position: 'relative', aspectRatio: '1' }}>
-                <img src={p} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '6px' }} />
+                {m.kind === 'video' ? (
+                  <video
+                    src={m.src}
+                    muted
+                    autoPlay
+                    loop
+                    playsInline
+                    style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '6px', background: '#000' }}
+                  />
+                ) : (
+                  <img src={m.src} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '6px' }} />
+                )}
+                {m.kind === 'video' && (
+                  <span
+                    style={{
+                      position: 'absolute', bottom: 4, left: 4,
+                      background: 'rgba(0,0,0,0.6)', color: '#fff',
+                      padding: '1px 5px', borderRadius: 4,
+                      fontSize: 9, fontWeight: 600, letterSpacing: 0.5,
+                    }}
+                  >
+                    VIDEO
+                  </span>
+                )}
                 <button
                   className="icon-btn danger"
                   style={{ position: 'absolute', top: '4px', right: '4px', width: '20px', height: '20px', fontSize: '11px' }}
@@ -211,10 +244,24 @@ function MosaicFields({ slide, onPatch }: { slide: MosaicSlide; onPatch: (patch:
             ))}
           </div>
         )}
-        <label className="photo-upload">
-          <input type="file" accept="image/*" multiple onChange={handleAdd} style={{ display: 'none' }} />
-          📷 Add photos (up to 9)
-        </label>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <label className="photo-upload" style={{ flex: 1 }}>
+            <input type="file" accept="image/*" multiple onChange={handleAddPhotos} style={{ display: 'none' }} />
+            📷 Add photos
+          </label>
+          <button
+            type="button"
+            className="photo-upload"
+            style={{ flex: 1, fontFamily: 'inherit' }}
+            onClick={handleAddVideo}
+            disabled={media.length >= 9}
+          >
+            🎥 Add video URL
+          </button>
+        </div>
+        <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)', marginTop: 6 }}>
+          Up to 9 items total ({media.length}/9). Videos must be MP4/WebM URLs.
+        </div>
       </div>
       <Field label="Eyebrow" value={slide.eyebrow ?? ''} placeholder="some pics or stuff" onChange={(v) => onPatch({ eyebrow: v })} />
       <Field label="Title" value={slide.title ?? ''} placeholder="here are the pics" onChange={(v) => onPatch({ title: v })} />

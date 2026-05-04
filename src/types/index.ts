@@ -162,11 +162,17 @@ export interface LetterSlide extends SlideBase {
   signoff?: string;
 }
 
+export type MediaItem =
+  | { kind: 'image'; src: string }
+  | { kind: 'video'; src: string };
+
 export interface MosaicSlide extends SlideBase {
   type: 'mosaic';
   eyebrow?: string;
   title?: string;
   sub?: string;
+  media?: MediaItem[];
+  /** @deprecated Migrated to `media`. Kept on the type only so legacy data parses. */
   photos?: string[];
 }
 

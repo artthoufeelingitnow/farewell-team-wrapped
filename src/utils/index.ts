@@ -104,7 +104,7 @@ export function makeDefaultSlide(type: SlideType, name: string): Slide {
     case 'letter':
       return { type, bg, greeting: (name || 'Friend') + ',', body: '', signoff: '— Michael' };
     case 'mosaic':
-      return { type, bg, eyebrow: 'Memories', title: '', sub: '', photos: [] };
+      return { type, bg, eyebrow: 'Memories', title: '', sub: '', media: [] };
     case 'signoff':
       return { type, bg, eyebrow: 'Until next time', title: 'Thank you', sub: '' };
   }
@@ -209,6 +209,20 @@ export function migrateSlide(slide: unknown): Slide {
   const f = migrateFragments(raw.fragments);
   if (f) migrated.fragments = f;
   else delete migrated.fragments;
+
+  // Mosaic legacy: photos: string[] → media: { kind: 'image', src }[]
+  if (raw.type === 'mosaic') {
+    const existingMedia = Array.isArray(raw.media) ? (raw.media as unknown[]) : null;
+    const legacyPhotos = Array.isArray(raw.photos) ? (raw.photos as string[]) : null;
+    if (!existingMedia && legacyPhotos) {
+      migrated.media = legacyPhotos
+        .filter((s) => typeof s === 'string')
+        .map((src) => ({ kind: 'image', src }));
+    }
+    // Drop the legacy field once migrated so the export stays clean.
+    delete migrated.photos;
+  }
+
   return migrated as unknown as Slide;
 }
 

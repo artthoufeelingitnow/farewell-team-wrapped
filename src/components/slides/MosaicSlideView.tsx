@@ -1,41 +1,42 @@
 import { useEffect, useRef, useState } from 'react';
-import type { MosaicSlide } from '../../types';
+import type { MosaicSlide, MediaItem } from '../../types';
 import { usePlayerStore } from '../../store/playerStore';
 
 const SWIPE_DISMISS_PX = 100;
 const TAP_THRESHOLD_PX = 6;
 
 export function MosaicSlideView({ slide }: { slide: MosaicSlide }) {
-  const photos = (slide.photos || []).filter(Boolean);
+  // Source of truth is `media`. Migration converts old `photos` to media on load.
+  const media = (slide.media || []).filter((m) => m && m.src);
   const setPaused = usePlayerStore((s) => s.setPaused);
-  const [expandedSrc, setExpandedSrc] = useState<string | null>(null);
+  const [expandedItem, setExpandedItem] = useState<MediaItem | null>(null);
   const [dragY, setDragY] = useState(0);
   const [dragging, setDragging] = useState(false);
   const startYRef = useRef(0);
 
-  // Pause auto-advance while a photo is expanded; ensure unpause on unmount.
+  // Pause auto-advance while a media item is expanded; ensure unpause on unmount.
   useEffect(() => {
-    setPaused(!!expandedSrc);
+    setPaused(!!expandedItem);
     return () => setPaused(false);
-  }, [expandedSrc, setPaused]);
+  }, [expandedItem, setPaused]);
 
   // Escape closes the lightbox before bubbling to the player's Escape (close player).
   useEffect(() => {
-    if (!expandedSrc) return;
+    if (!expandedItem) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         e.stopPropagation();
-        setExpandedSrc(null);
+        setExpandedItem(null);
       }
     };
     document.addEventListener('keydown', onKey, true);
     return () => document.removeEventListener('keydown', onKey, true);
-  }, [expandedSrc]);
+  }, [expandedItem]);
 
   const closeLightbox = () => {
     setDragY(0);
     setDragging(false);
-    setExpandedSrc(null);
+    setExpandedItem(null);
   };
 
   const onLightboxPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
@@ -55,48 +56,42 @@ export function MosaicSlideView({ slide }: { slide: MosaicSlide }) {
     setDragging(false);
     (e.currentTarget as HTMLElement).releasePointerCapture?.(e.pointerId);
     if (dragY >= SWIPE_DISMISS_PX || dragY < TAP_THRESHOLD_PX) {
-      // Either a successful swipe-down OR a tap (effectively no drag) — both close.
       closeLightbox();
     } else {
-      // Partial swipe — snap back.
       setDragY(0);
     }
   };
 
-  if (photos.length === 0) {
+  if (media.length === 0) {
     return (
       <>
         <div className="slide-eyebrow">{slide.eyebrow || 'Memories'}</div>
         <h2>{slide.title || ''}</h2>
-        <p style={{ opacity: 0.6 }}>[add photos]</p>
+        <p style={{ opacity: 0.6 }}>[add photos or videos]</p>
       </>
     );
   }
 
   // Pad up to 9 by repeating
-  const padded = [...photos];
-  while (padded.length < 9) padded.push(photos[padded.length % photos.length]);
+  const padded: MediaItem[] = [...media];
+  while (padded.length < 9) padded.push(media[padded.length % media.length]);
 
   return (
     <>
       <div className="slide-eyebrow">{slide.eyebrow || 'Memories'}</div>
       <h2>{slide.title || ''}</h2>
       <div className="photo-mosaic">
-        {padded.slice(0, 9).map((p, i) => (
-          <img
+        {padded.slice(0, 9).map((item, i) => (
+          <MosaicCell
             key={i}
-            src={p}
-            alt=""
-            onClick={(e) => {
-              e.stopPropagation();
-              setExpandedSrc(p);
-            }}
+            item={item}
+            onClick={() => setExpandedItem(item)}
           />
         ))}
       </div>
       {slide.sub && <p>{slide.sub}</p>}
 
-      {expandedSrc && (
+      {expandedItem && (
         <div
           className="photo-lightbox"
           role="dialog"
@@ -119,11 +114,43 @@ export function MosaicSlideView({ slide }: { slide: MosaicSlide }) {
               transition: dragging ? 'none' : 'transform 0.2s ease, opacity 0.2s ease',
             }}
           >
-            <img src={expandedSrc} alt="" draggable={false} />
-            <div className="photo-lightbox-hint">Swipe down</div>
+            {expandedItem.kind === 'video' ? (
+              <video
+                src={expandedItem.src}
+                muted
+                autoPlay
+                loop
+                playsInline
+                draggable={false}
+              />
+            ) : (
+              <img src={expandedItem.src} alt="" draggable={false} />
+            )}
+            <div className="photo-lightbox-hint">Swipe down to exit view! ⬇️</div>
           </div>
         </div>
       )}
     </>
   );
+}
+
+/** Single cell of the mosaic — image or muted-autoplay-loop video. */
+function MosaicCell({ item, onClick }: { item: MediaItem; onClick: () => void }) {
+  const handleClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    onClick();
+  };
+  if (item.kind === 'video') {
+    return (
+      <video
+        src={item.src}
+        muted
+        autoPlay
+        loop
+        playsInline
+        onClick={handleClick}
+      />
+    );
+  }
+  return <img src={item.src} alt="" onClick={handleClick} />;
 }

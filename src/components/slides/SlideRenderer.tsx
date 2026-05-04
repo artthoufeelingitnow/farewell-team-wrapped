@@ -21,7 +21,7 @@ export function SlideRenderer({ slide, colleague, onReplay, onClose }: Props) {
   const darkText = bgNeedsDarkText(slide.bg);
 
   return (
-    <div className={`slide${darkText ? ' text-dark' : ''}`}>
+    <div className={`slide slide-${slide.type}${darkText ? ' text-dark' : ''}`}>
       <SlideBackground config={slide.bg} />
       <FragmentLayer config={slide.fragments} />
       <SlideContent slide={slide} colleague={colleague} onReplay={onReplay} onClose={onClose} />
