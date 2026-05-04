@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useAppStore } from '../../store/appStore';
 import { usePlayerStore } from '../../store/playerStore';
 import type { Colleague, Slide, SlideType } from '../../types';
@@ -26,6 +26,37 @@ export function ColleagueEditor({ colleague }: Props) {
 
   const slides = colleague.slides ?? [];
 
+  // Scroll the AddSlideMenu into view as soon as it opens (clicking + Add slide).
+  useEffect(() => {
+    if (!showAddSlide) return;
+    const t = setTimeout(() => {
+      document
+        .querySelector('.add-slide-menu')
+        ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 30);
+    return () => clearTimeout(t);
+  }, [showAddSlide]);
+
+  // When a slide is added (length grows for the same colleague), scroll the new
+  // last .slide-item into view. Skips on colleague switch (length change is unrelated).
+  const prevSlideCountRef = useRef(slides.length);
+  const prevColleagueIdRef = useRef(colleague.id);
+  useEffect(() => {
+    const isSameColleague = colleague.id === prevColleagueIdRef.current;
+    if (isSameColleague && slides.length > prevSlideCountRef.current) {
+      const t = setTimeout(() => {
+        const items = document.querySelectorAll('.slide-item');
+        const last = items[items.length - 1] as HTMLElement | undefined;
+        last?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 30);
+      prevSlideCountRef.current = slides.length;
+      prevColleagueIdRef.current = colleague.id;
+      return () => clearTimeout(t);
+    }
+    prevSlideCountRef.current = slides.length;
+    prevColleagueIdRef.current = colleague.id;
+  }, [slides.length, colleague.id]);
+
   const save = async () => {
     const patch: Partial<Colleague> = {};
     if (pendingPassword) {
@@ -41,6 +72,7 @@ export function ColleagueEditor({ colleague }: Props) {
   const handleAddSlide = (type: SlideType) => {
     addSlide(colleague.id, makeDefaultSlide(type, colleague.name));
     setShowAddSlide(false);
+    // The useEffect above handles scrolling once React has rendered the new slide.
   };
 
   const handleDelete = () => {
@@ -59,7 +91,7 @@ export function ColleagueEditor({ colleague }: Props) {
               type="text"
               className="field-input"
               value={colleague.name}
-              placeholder="e.g. LS, Marcus, Sarah"
+              placeholder="e.g. BB, Bob, Bobby"
               onChange={(e) => updateColleague(colleague.id, { name: e.target.value })}
             />
           </div>
