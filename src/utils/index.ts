@@ -105,6 +105,8 @@ export function makeDefaultSlide(type: SlideType, name: string): Slide {
       return { type, bg, greeting: (name || 'Friend') + ',', body: '', signoff: '— Michael' };
     case 'mosaic':
       return { type, bg, eyebrow: 'Memories', title: '', sub: '', media: [] };
+    case 'orb-finale':
+      return { type, bg };
     case 'signoff':
       return { type, bg, eyebrow: 'Until next time', title: 'Thank you', sub: '' };
   }

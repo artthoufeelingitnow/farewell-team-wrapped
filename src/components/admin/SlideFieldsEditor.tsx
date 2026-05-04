@@ -47,6 +47,15 @@ export function SlideFieldsEditor({ slide, onPatch }: Props) {
       );
     case 'mosaic':
       return <MosaicFields slide={slide} onPatch={onPatch} />;
+    case 'orb-finale':
+      return (
+        <div className="slide-fields">
+          <div className="full" style={{ fontSize: 13, color: 'rgba(255,255,255,0.65)', lineHeight: 1.5 }}>
+            🔮 The orb is generated from this colleague's name + their photos. No fields to edit —
+            the visual will update automatically as you tweak earlier slides.
+          </div>
+        </div>
+      );
     case 'signoff':
       return (
         <div className="slide-fields">

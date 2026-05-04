@@ -1395,7 +1395,7 @@
      content z-index so its position: fixed isn't overridden.
      The photo-mosaic is also excluded so it doesn't form a stacking context that
      would trap its child imgs' z-index 7 below the player's nav-zones (z 4). */
-  .slide > *:not(.fragment-layer):not(.slide-bg):not(.photo-lightbox):not(.photo-mosaic):not(.quote-mark) {
+  .slide > *:not(.fragment-layer):not(.slide-bg):not(.photo-lightbox):not(.photo-mosaic):not(.quote-mark):not(.memory-orb) {
     position: relative;
     z-index: 2;
   }
@@ -1725,3 +1725,67 @@
   .slide-preview-stage .slide { animation: none; }
   /* Hide replay/close buttons on the signoff slide preview — they're player-only */
   .slide-preview-stage .end-actions { display: none; }
+
+  /* ============================================================
+     ORB FINALE — 3D memory orb keepsake
+     ============================================================ */
+  .memory-orb {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 70px 28px 60px;
+  }
+  .memory-orb-stage {
+    width: 100%;
+    max-width: 520px;
+    aspect-ratio: 1 / 1;
+    /* The Canvas inside fills this box */
+  }
+  .memory-orb-stage > canvas {
+    display: block;
+    width: 100% !important;
+    height: 100% !important;
+  }
+  .memory-orb-text {
+    margin-top: 12px;
+    text-align: center;
+  }
+  .memory-orb-title {
+    font-family: var(--font-display);
+    font-size: clamp(28px, 5vw, 44px);
+    font-weight: 400;
+    color: #fff;
+    margin: 0 0 6px;
+    letter-spacing: 0.3px;
+  }
+  .memory-orb-caption {
+    color: rgba(255, 255, 255, 0.55);
+    font-size: 13px;
+    letter-spacing: 4px;
+    text-transform: uppercase;
+    margin: 0 0 20px;
+  }
+  .memory-orb-save {
+    background: rgba(255, 255, 255, 0.12);
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    color: #fff;
+    padding: 12px 26px;
+    border-radius: 999px;
+    font-family: var(--font-body);
+    font-size: 15px;
+    font-weight: 700;
+    cursor: pointer;
+    backdrop-filter: blur(6px);
+    transition: background 0.15s ease, transform 0.12s ease;
+  }
+  .memory-orb-save:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.2);
+    transform: scale(1.03);
+  }
+  .memory-orb-save:disabled {
+    opacity: 0.5;
+    cursor: wait;
+  }

@@ -17,6 +17,7 @@ export type SlideType =
   | 'podium'
   | 'letter'
   | 'mosaic'
+  | 'orb-finale'
   | 'signoff';
 
 export interface PodiumItem {
@@ -185,6 +186,13 @@ export interface SignoffSlide extends SlideBase {
   sub?: string;
 }
 
+/** 3D generative finale orb. Visual is fully derived from the colleague's
+ *  name (deterministic seed) + their photos (extracted color palette), so
+ *  no per-slide editable content fields are needed. */
+export interface OrbFinaleSlide extends SlideBase {
+  type: 'orb-finale';
+}
+
 export type Slide =
   | IntroSlide
   | StatSlide
@@ -193,6 +201,7 @@ export type Slide =
   | PodiumSlide
   | LetterSlide
   | MosaicSlide
+  | OrbFinaleSlide
   | SignoffSlide;
 
 export interface Colleague {
