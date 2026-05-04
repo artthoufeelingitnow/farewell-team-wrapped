@@ -1361,36 +1361,80 @@
     color: #FFC75F;
   }
 
-  .color-row {
-    display: grid;
-    grid-template-columns: auto 1fr auto;
-    gap: 8px;
+  .gradient-stops-row {
+    display: flex;
     align-items: center;
+    justify-content: center;
+    gap: 10px;
+    margin-bottom: 10px;
+    flex-wrap: wrap;
+  }
+  .gradient-stops-row .stop-label {
+    font-size: 12px;
+    color: rgba(255,255,255,0.7);
+  }
+  .gradient-stops-row input[type="color"] {
+    width: 72px;
+    height: 54px;
+    padding: 0;
+    border: 2px solid transparent;
+    border-radius: 10px;
+    cursor: pointer;
+    background: transparent;
+    transition: transform 0.12s ease, border-color 0.12s ease;
+  }
+  .gradient-stops-row input[type="color"]:hover {
+    transform: scale(1.04);
+    border-color: rgba(255,255,255,0.25);
+  }
+  .gradient-stops-row input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
+  .gradient-stops-row input[type="color"]::-webkit-color-swatch {
+    border: none;
+    border-radius: 8px;
+  }
+  .gradient-stops-row input[type="color"]::-moz-color-swatch {
+    border: none;
+    border-radius: 8px;
+  }
+  .gradient-stops-row .stop-arrow {
+    color: rgba(255,255,255,0.5);
+    font-size: 18px;
+    user-select: none;
+  }
+
+  .color-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
     margin-bottom: 8px;
   }
   .color-row label {
     font-size: 12px;
     color: rgba(255,255,255,0.7);
-    min-width: 60px;
+    min-width: 40px;
   }
   .color-row input[type="color"] {
-    width: 40px;
-    height: 28px;
+    width: 72px;
+    height: 54px;
     padding: 0;
-    border: 1px solid rgba(255,255,255,0.15);
-    border-radius: 6px;
-    background: transparent;
+    border: 2px solid transparent;
+    border-radius: 10px;
     cursor: pointer;
+    background: transparent;
+    transition: transform 0.12s ease, border-color 0.12s ease;
   }
-  .color-row .hex-input {
-    background: rgba(0,0,0,0.4);
-    border: 1px solid rgba(255,255,255,0.1);
-    color: #fff;
-    border-radius: 6px;
-    padding: 5px 8px;
-    font-size: 12px;
-    font-family: ui-monospace, monospace;
-    width: 84px;
+  .color-row input[type="color"]:hover {
+    transform: scale(1.04);
+    border-color: rgba(255,255,255,0.25);
+  }
+  .color-row input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
+  .color-row input[type="color"]::-webkit-color-swatch {
+    border: none;
+    border-radius: 8px;
+  }
+  .color-row input[type="color"]::-moz-color-swatch {
+    border: none;
+    border-radius: 8px;
   }
 
   .slider-row {
@@ -1406,16 +1450,17 @@
     accent-color: #FFC75F;
   }
 
+  .blobs-grid {
+    display: grid;
+    grid-template-columns: repeat(3, max-content);
+    gap: 10px;
+    justify-content: center;
+    margin-bottom: 8px;
+  }
   .blob-row {
     display: flex;
     align-items: center;
     gap: 6px;
-    margin-bottom: 6px;
-  }
-  .blob-row input[type="color"] {
-    width: 30px; height: 24px; padding: 0;
-    border: 1px solid rgba(255,255,255,0.15); border-radius: 5px;
-    background: transparent; cursor: pointer;
   }
   .blob-row .icon-btn { width: 22px; height: 22px; font-size: 12px; }
 
@@ -1468,3 +1513,63 @@
     background: rgba(0,0,0,0.6);
   }
   .fragment-image-cell .icon-btn.danger:hover { background: rgba(255,77,77,0.7); }
+
+  /* ============================================================
+     ADMIN — Canva-style preset tiles (rectangular, hover-edit)
+     ============================================================ */
+  .preset-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(72px, 1fr));
+    gap: 8px;
+  }
+  .preset-tile {
+    position: relative;
+    aspect-ratio: 4 / 3;
+    border-radius: 10px;
+    border: 2px solid transparent;
+    overflow: hidden;
+    transition: transform 0.12s ease, border-color 0.12s ease, box-shadow 0.12s ease;
+    /* The .bg-pink etc. classes apply the gradient as the tile's background */
+  }
+  .preset-tile:hover { transform: scale(1.04); }
+  .preset-tile.active {
+    border-color: #FFC75F;
+    box-shadow: 0 0 0 2px rgba(255,199,95,0.35);
+  }
+  .preset-tile-select {
+    position: absolute;
+    inset: 0;
+    background: transparent;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    z-index: 1;
+  }
+  .preset-tile-edit {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: rgba(0,0,0,0.55);
+    border: none;
+    color: #fff;
+    width: 37px;
+    height: 37px;
+    border-radius: 50%;
+    cursor: pointer;
+    font-size: 18px;
+    line-height: 1;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    transition: opacity 0.15s ease, background 0.15s ease, transform 0.12s ease;
+    z-index: 2;
+  }
+  .preset-tile:hover .preset-tile-edit,
+  .preset-tile-edit:focus-visible { opacity: 1; }
+  .preset-tile-edit:hover {
+    background: rgba(0,0,0,0.8);
+    transform: translate(-50%, -50%) scale(1.08);
+  }

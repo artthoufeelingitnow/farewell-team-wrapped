@@ -51,8 +51,6 @@ function LavaBackground({ config }: { config: LavaBg }) {
   );
 }
 
-/** True if the bg config asks for dark text (e.g. cream / yellow). Used by SlideRenderer
- *  to set a `text-dark` class on the slide. */
 export function bgNeedsDarkText(config: BgConfig): boolean {
   if (config.kind === 'preset') return PRESET_BG_GRADIENTS[config.preset].textColor === 'dark';
   return config.textColor === 'dark';

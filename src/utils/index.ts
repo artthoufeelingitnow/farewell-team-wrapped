@@ -4,6 +4,7 @@ import type {
   Colleague,
   AppData,
   BgConfig,
+  GradientBg,
   FragmentConfig,
   FragmentType,
   SlideBg,
@@ -12,6 +13,7 @@ import {
   SLIDE_TYPES,
   DEFAULT_SLIDE_DURATION,
   DEFAULT_FRAGMENT_PATTERN_BY_TYPE,
+  PRESET_BG_GRADIENTS,
 } from './constants';
 
 export function uid(): string {
@@ -61,21 +63,35 @@ export function compressImage(dataUrl: string, maxDim = 900): Promise<string> {
   });
 }
 
+/** Convert a legacy preset name to an editable gradient using the matching colors. */
+export function gradientFromPreset(preset: SlideBg): GradientBg {
+  const g = PRESET_BG_GRADIENTS[preset] ?? PRESET_BG_GRADIENTS['bg-dark'];
+  return {
+    kind: 'gradient',
+    from: g.from,
+    to: g.to,
+    angle: 135,
+    shape: 'linear',
+    textColor: g.textColor,
+  };
+}
+
 export function makeDefaultSlide(type: SlideType, name: string): Slide {
   const t = SLIDE_TYPES[type];
+  const bg: BgConfig = { kind: 'preset', preset: t.bg };
   switch (type) {
     case 'intro':
-      return { type, bg: { kind: 'preset', preset: t.bg }, eyebrow: 'For ' + (name || ''), title: 'A wrapped, just for you', sub: '' };
+      return { type, bg, eyebrow: 'For ' + (name || ''), title: 'A wrapped, just for you', sub: '' };
     case 'stat':
-      return { type, bg: { kind: 'preset', preset: t.bg }, eyebrow: 'Together we...', bigNumber: '', label: '', sub: '' };
+      return { type, bg, eyebrow: 'Together we...', bigNumber: '', label: '', sub: '' };
     case 'photo':
-      return { type, bg: { kind: 'preset', preset: t.bg }, eyebrow: 'A moment', caption: '', sub: '', photoData: '' };
+      return { type, bg, eyebrow: 'A moment', caption: '', sub: '', photoData: '' };
     case 'quote':
-      return { type, bg: { kind: 'preset', preset: t.bg }, eyebrow: '', body: '', attrib: '' };
+      return { type, bg, eyebrow: '', body: '', attrib: '' };
     case 'podium':
       return {
         type,
-        bg: { kind: 'preset', preset: t.bg },
+        bg,
         eyebrow: '',
         title: '',
         items: [
@@ -86,11 +102,11 @@ export function makeDefaultSlide(type: SlideType, name: string): Slide {
         sub: '',
       };
     case 'letter':
-      return { type, bg: { kind: 'preset', preset: t.bg }, greeting: (name || 'Friend') + ',', body: '', signoff: '— Michael' };
+      return { type, bg, greeting: (name || 'Friend') + ',', body: '', signoff: '— Michael' };
     case 'mosaic':
-      return { type, bg: { kind: 'preset', preset: t.bg }, eyebrow: 'Memories', title: '', sub: '', photos: [] };
+      return { type, bg, eyebrow: 'Memories', title: '', sub: '', photos: [] };
     case 'signoff':
-      return { type, bg: { kind: 'preset', preset: t.bg }, eyebrow: 'Until next time', title: 'Thank you', sub: '' };
+      return { type, bg, eyebrow: 'Until next time', title: 'Thank you', sub: '' };
   }
 }
 
@@ -128,7 +144,6 @@ export function getSlideDuration(slide: Slide | undefined): number {
 // old, new, or partially-shaped.
 // ============================================================
 
-const VALID_BG_KINDS = new Set(['preset', 'gradient', 'lava']);
 const VALID_FRAGMENT_TYPES = new Set<FragmentType>([
   'leaves',
   'bubbles',
@@ -139,7 +154,10 @@ const VALID_FRAGMENT_TYPES = new Set<FragmentType>([
   'stars',
 ]);
 
+const VALID_BG_KINDS = new Set(['preset', 'gradient', 'lava']);
+
 function migrateBg(bg: unknown): BgConfig {
+  // Legacy: bare string preset name
   if (typeof bg === 'string') {
     return { kind: 'preset', preset: bg as SlideBg };
   }

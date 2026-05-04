@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import type {
   Slide,
   SlideBg,
@@ -21,7 +21,7 @@ import {
   DEFAULT_LAVA_BG,
   PRESET_BG_GRADIENTS,
 } from '../../utils/constants';
-import { readFileAsDataURL, compressImage } from '../../utils';
+import { readFileAsDataURL, compressImage, gradientFromPreset } from '../../utils';
 
 interface Props {
   slide: Slide;
@@ -63,19 +63,21 @@ function BgEditor({ bg, onPatch }: { bg: BgConfig; onPatch: (bg: BgConfig) => vo
       const preset: SlideBg = bg.kind === 'preset' ? bg.preset : 'bg-pink';
       onPatch({ kind: 'preset', preset });
     } else if (next === 'gradient') {
-      const fallbackPreset = bg.kind === 'preset' ? PRESET_BG_GRADIENTS[bg.preset] : PRESET_BG_GRADIENTS['bg-pink'];
-      const seed: GradientBg = {
-        kind: 'gradient',
-        from: fallbackPreset.from,
-        to: fallbackPreset.to,
-        angle: 135,
-        shape: 'linear',
-        textColor: fallbackPreset.textColor,
-      };
+      const seed: GradientBg =
+        bg.kind === 'preset' ? gradientFromPreset(bg.preset) : gradientFromPreset('bg-pink');
       onPatch(seed);
     } else {
       onPatch({ ...DEFAULT_LAVA_BG });
     }
+  };
+
+  /** Customize a preset's `from` color via the native picker.
+   *  Flips bg from preset → gradient with the new `from` and the preset's original `to`,
+   *  and bumps the tab to Custom so the user can keep editing. */
+  const customizePreset = (preset: SlideBg, newFrom: string) => {
+    const grad = gradientFromPreset(preset);
+    onPatch({ ...grad, from: newFrom });
+    setTab('gradient');
   };
 
   return (
@@ -87,26 +89,84 @@ function BgEditor({ bg, onPatch }: { bg: BgConfig; onPatch: (bg: BgConfig) => vo
         <button type="button" className={`bg-tab${tab === 'lava' ? ' active' : ''}`} onClick={() => switchTab('lava')}>Lava</button>
       </div>
 
-      {bg.kind === 'preset' && <PresetTab bg={bg} onPatch={onPatch} />}
+      {bg.kind === 'preset' && <PresetTab bg={bg} onPatch={onPatch} onCustomize={customizePreset} />}
       {bg.kind === 'gradient' && <GradientTab bg={bg} onPatch={onPatch} />}
       {bg.kind === 'lava' && <LavaTab bg={bg} onPatch={onPatch} />}
     </>
   );
 }
 
-function PresetTab({ bg, onPatch }: { bg: { kind: 'preset'; preset: SlideBg }; onPatch: (bg: BgConfig) => void }) {
+function PresetTab({
+  bg,
+  onPatch,
+  onCustomize,
+}: {
+  bg: { kind: 'preset'; preset: SlideBg };
+  onPatch: (bg: BgConfig) => void;
+  onCustomize: (preset: SlideBg, newFrom: string) => void;
+}) {
   return (
-    <div className="swatches-row">
+    <div className="preset-grid">
       {SLIDE_BG_OPTIONS.map((preset) => (
-        <button
+        <PresetTile
           key={preset}
-          type="button"
-          className={`swatch ${preset}${bg.preset === preset ? ' active' : ''}`}
-          onClick={() => onPatch({ kind: 'preset', preset })}
-          title={preset.replace('bg-', '')}
-          aria-label={`Background ${preset.replace('bg-', '')}`}
+          preset={preset}
+          active={bg.preset === preset}
+          onSelect={() => onPatch({ kind: 'preset', preset })}
+          onCustomize={(newFrom) => onCustomize(preset, newFrom)}
         />
       ))}
+    </div>
+  );
+}
+
+/** A single Canva-style preset tile: full-area click selects the preset; a hover-revealed
+ *  pencil icon opens the native color picker via a hidden input, letting the user replace
+ *  the gradient's first stop. */
+function PresetTile({
+  preset,
+  active,
+  onSelect,
+  onCustomize,
+}: {
+  preset: SlideBg;
+  active: boolean;
+  onSelect: () => void;
+  onCustomize: (hex: string) => void;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const presetMeta = PRESET_BG_GRADIENTS[preset];
+
+  return (
+    <div className={`preset-tile ${preset}${active ? ' active' : ''}`}>
+      <button
+        type="button"
+        className="preset-tile-select"
+        onClick={onSelect}
+        title={preset.replace('bg-', '')}
+        aria-label={`Background ${preset.replace('bg-', '')}`}
+      />
+      <button
+        type="button"
+        className="preset-tile-edit"
+        onClick={(e) => {
+          e.stopPropagation();
+          inputRef.current?.click();
+        }}
+        title="Customize colors"
+        aria-label="Customize colors"
+      >
+        ✎
+      </button>
+      <input
+        ref={inputRef}
+        type="color"
+        defaultValue={presetMeta.from}
+        onChange={(e) => onCustomize(e.target.value)}
+        style={{ position: 'absolute', opacity: 0, pointerEvents: 'none', width: 1, height: 1, top: 0, left: 0 }}
+        tabIndex={-1}
+        aria-hidden="true"
+      />
     </div>
   );
 }
@@ -116,8 +176,21 @@ function GradientTab({ bg, onPatch }: { bg: GradientBg; onPatch: (bg: BgConfig) 
 
   return (
     <>
-      <ColorRow label="From" hex={bg.from} onChange={(from) => update({ from })} />
-      <ColorRow label="To" hex={bg.to} onChange={(to) => update({ to })} />
+      <div className="gradient-stops-row">
+        <span className="stop-label">From</span>
+        <input
+          type="color"
+          value={bg.from}
+          onChange={(e) => update({ from: e.target.value })}
+        />
+        <span className="stop-arrow">→</span>
+        <span className="stop-label">To</span>
+        <input
+          type="color"
+          value={bg.to}
+          onChange={(e) => update({ to: e.target.value })}
+        />
+      </div>
       <div className="slider-row">
         <span>Shape</span>
         <div style={{ display: 'flex', gap: 6 }}>
@@ -168,27 +241,26 @@ function LavaTab({ bg, onPatch }: { bg: LavaBg; onPatch: (bg: BgConfig) => void 
         <span>Blobs</span>
         <span>{bg.blobs.length} / {MAX_BLOBS}</span>
       </div>
-      {bg.blobs.map((blob, i) => (
-        <div key={i} className="blob-row">
-          <input
-            type="color"
-            value={blob.color}
-            onChange={(e) => updateBlob(i, e.target.value)}
-          />
-          <span style={{ fontFamily: 'ui-monospace, monospace', fontSize: 11, color: 'rgba(255,255,255,0.6)' }}>
-            {blob.color}
-          </span>
-          <button
-            type="button"
-            className="icon-btn danger"
-            onClick={() => removeBlob(i)}
-            disabled={bg.blobs.length <= MIN_BLOBS}
-            title="Remove blob"
-          >
-            ×
-          </button>
-        </div>
-      ))}
+      <div className="blobs-grid">
+        {bg.blobs.map((blob, i) => (
+          <div key={i} className="blob-row">
+            <ColorRow
+              label={`#${i + 1}`}
+              hex={blob.color}
+              onChange={(c) => updateBlob(i, c)}
+            />
+            <button
+              type="button"
+              className="icon-btn danger"
+              onClick={() => removeBlob(i)}
+              disabled={bg.blobs.length <= MIN_BLOBS}
+              title="Remove blob"
+            >
+              ×
+            </button>
+          </div>
+        ))}
+      </div>
       <button
         type="button"
         className="add-blob-btn"
@@ -393,21 +465,14 @@ function ColorRow({
   hex,
   onChange,
 }: {
-  label: string;
+  label?: string;
   hex: string;
   onChange: (hex: string) => void;
 }) {
   return (
     <div className="color-row">
-      <label>{label}</label>
+      {label && <label>{label}</label>}
       <input type="color" value={hex} onChange={(e) => onChange(e.target.value)} />
-      <input
-        type="text"
-        className="hex-input"
-        value={hex}
-        onChange={(e) => onChange(e.target.value)}
-        spellCheck={false}
-      />
     </div>
   );
 }
