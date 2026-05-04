@@ -660,10 +660,15 @@
     display: flex;
     align-items: flex-end;
     justify-content: center;
-    gap: 8px;
-    margin: 20px 0;
+    gap: 10px;
+    margin: 18px 0;
     width: 100%;
-    max-width: 380px;
+    max-width: 540px;
+  }
+  /* Shift podium-slide content higher to make room for the taller podiums. */
+  .slide.slide-podium {
+    padding-top: 24px;
+    padding-bottom: 60px;
   }
   .podium-step {
     background: rgba(0,0,0,0.25);
@@ -685,9 +690,51 @@
     word-break: break-word;
   }
   .podium-step .count { font-size: 11px; opacity: 0.75; margin-top: 4px; }
-  .podium-step.s1 { height: 160px; background: rgba(255,255,255,0.22); }
-  .podium-step.s2 { height: 130px; }
-  .podium-step.s3 { height: 110px; }
+  .podium-step.s1 { height: 340px; background: rgba(255,255,255,0.22); }
+  .podium-step.s2 { height: 290px; }
+  .podium-step.s3 { height: 250px; }
+
+  /* Layout per step: rank at TOP, media in the MIDDLE, name+count at BOTTOM.
+     Two `margin-top: auto`s (on media and name) split the empty space evenly,
+     so media floats between rank and the text cluster. */
+  .podium-step:has(.podium-media-inside) {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+  .podium-step:has(.podium-media-inside) .podium-media-inside,
+  .podium-step:has(.podium-media-inside) .name {
+    margin-top: auto;
+  }
+
+  /* Shared media tile styling */
+  .podium-media {
+    border-radius: 8px;
+    overflow: hidden;
+    background: rgba(0,0,0,0.25);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.35);
+  }
+  .podium-media img,
+  .podium-media video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+
+  /* Standardized media: same size on every step so they read as a uniform
+     trio. Hierarchy comes from the step heights (airspace above the media). */
+  .podium-media-inside {
+    width: 90%;
+    height: 150px;
+    margin: 6px auto 8px;
+  }
+
+  /* Tighten the rank when there's media inside so everything still fits */
+  .podium-step:has(.podium-media-inside) .rank { font-size: 32px; margin-bottom: 2px; }
+  .podium-step.s2:has(.podium-media-inside) .rank,
+  .podium-step.s3:has(.podium-media-inside) .rank { font-size: 28px; }
+  .podium-step:has(.podium-media-inside) .name { font-size: 14px; line-height: 1.2; }
 
   /* letter slide */
   .letter-wrap {

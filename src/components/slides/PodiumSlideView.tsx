@@ -1,4 +1,4 @@
-import type { PodiumSlide } from '../../types';
+import type { PodiumSlide, MediaItem } from '../../types';
 
 export function PodiumSlideView({ slide }: { slide: PodiumSlide }) {
   const items = (slide.items || []).slice(0, 3);
@@ -16,6 +16,11 @@ export function PodiumSlideView({ slide }: { slide: PodiumSlide }) {
           return (
             <div key={idx} className={`podium-step ${cls}`}>
               <div className="rank">#{idx}</div>
+              {item.media && (
+                <div className="podium-media podium-media-inside">
+                  <PodiumMedia media={item.media} />
+                </div>
+              )}
               <div className="name">{item.name || ''}</div>
               {item.count && <div className="count">{item.count}</div>}
             </div>
@@ -25,4 +30,11 @@ export function PodiumSlideView({ slide }: { slide: PodiumSlide }) {
       {slide.sub && <p>{slide.sub}</p>}
     </>
   );
+}
+
+function PodiumMedia({ media }: { media: MediaItem }) {
+  if (media.kind === 'video') {
+    return <video src={media.src} muted autoPlay loop playsInline />;
+  }
+  return <img src={media.src} alt="" />;
 }

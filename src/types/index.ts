@@ -22,6 +22,8 @@ export type SlideType =
 export interface PodiumItem {
   name: string;
   count: string;
+  /** Optional photo or video for this rank — see MediaItem below for shape. */
+  media?: MediaItem;
 }
 
 export interface ItunesResult {

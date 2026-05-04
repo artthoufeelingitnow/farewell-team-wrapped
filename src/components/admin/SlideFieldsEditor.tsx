@@ -1,4 +1,4 @@
-import type { Slide, PodiumSlide, MosaicSlide, PhotoSlide, MediaItem } from '../../types';
+import type { Slide, PodiumSlide, MosaicSlide, PhotoSlide, MediaItem, PodiumItem } from '../../types';
 import { readFileAsDataURL, compressImage } from '../../utils';
 
 interface Props {
@@ -124,41 +124,98 @@ function PodiumFields({ slide, onPatch }: { slide: PodiumSlide; onPatch: (patch:
     { name: '', count: '' },
   ];
 
-  const updateItem = (idx: number, field: 'name' | 'count', val: string) => {
+  const updateItem = (idx: number, patch: Partial<PodiumItem>) => {
     const nextItems = [...items];
     while (nextItems.length <= idx) nextItems.push({ name: '', count: '' });
-    nextItems[idx] = { ...nextItems[idx], [field]: val };
+    nextItems[idx] = { ...nextItems[idx], ...patch };
     onPatch({ items: nextItems });
+  };
+
+  const handlePhotoUpload = async (idx: number, e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const dataUrl = await readFileAsDataURL(file);
+    const compressed = await compressImage(dataUrl, 700);
+    updateItem(idx, { media: { kind: 'image', src: compressed } });
+    e.target.value = '';
+  };
+
+  const handleVideoUrl = (idx: number) => {
+    const url = prompt('Paste video URL:');
+    if (!url) return;
+    const trimmed = url.trim();
+    if (!trimmed) return;
+    updateItem(idx, { media: { kind: 'video', src: trimmed } });
+  };
+
+  const handleRemoveMedia = (idx: number) => {
+    updateItem(idx, { media: undefined });
   };
 
   return (
     <div className="slide-fields">
       <Field label="Eyebrow" value={slide.eyebrow ?? ''} placeholder="the top 3..." onChange={(v) => onPatch({ eyebrow: v })} />
       <Field label="Title" value={slide.title ?? ''} placeholder="things or whatever..." onChange={(v) => onPatch({ title: v })} />
-      {[0, 1, 2].map((i) => (
-        <div key={i} style={{ display: 'contents' }}>
-          <div>
-            <label className="field-label">#{i + 1} Name</label>
-            <input
-              type="text"
-              className="field-input"
-              value={items[i]?.name ?? ''}
-              placeholder={`Item ${i + 1}`}
-              onChange={(e) => updateItem(i, 'name', e.target.value)}
-            />
+      {[0, 1, 2].map((i) => {
+        const item = items[i] ?? { name: '', count: '' };
+        const media = item.media;
+        return (
+          <div key={i} className="full" style={{ borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: 10, marginTop: 4 }}>
+            <label className="field-label" style={{ marginBottom: 8 }}>#{i + 1}</label>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 8 }}>
+              <input
+                type="text"
+                className="field-input"
+                value={item.name}
+                placeholder={`Item ${i + 1}`}
+                onChange={(e) => updateItem(i, { name: e.target.value })}
+              />
+              <input
+                type="text"
+                className="field-input"
+                value={item.count}
+                placeholder="e.g. every Tuesday"
+                onChange={(e) => updateItem(i, { count: e.target.value })}
+              />
+            </div>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+              {media && (
+                <div style={{ position: 'relative', width: 60, height: 45, borderRadius: 6, overflow: 'hidden', background: '#000', flexShrink: 0 }}>
+                  {media.kind === 'video' ? (
+                    <video src={media.src} muted autoPlay loop playsInline style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  ) : (
+                    <img src={media.src} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  )}
+                  <button
+                    className="icon-btn danger"
+                    style={{ position: 'absolute', top: 2, right: 2, width: 18, height: 18, fontSize: 10 }}
+                    onClick={() => handleRemoveMedia(i)}
+                  >
+                    ×
+                  </button>
+                </div>
+              )}
+              <label className="photo-upload" style={{ flex: 1, fontSize: 12, padding: '8px 10px' }}>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => handlePhotoUpload(i, e)}
+                  style={{ display: 'none' }}
+                />
+                {media?.kind === 'image' ? '🔁 Replace photo' : '📷 Photo'}
+              </label>
+              <button
+                type="button"
+                className="photo-upload"
+                style={{ flex: 1, fontFamily: 'inherit', fontSize: 12, padding: '8px 10px' }}
+                onClick={() => handleVideoUrl(i)}
+              >
+                {media?.kind === 'video' ? '🔁 Change URL' : '🎥 Video URL'}
+              </button>
+            </div>
           </div>
-          <div>
-            <label className="field-label">#{i + 1} Subtitle</label>
-            <input
-              type="text"
-              className="field-input"
-              value={items[i]?.count ?? ''}
-              placeholder="e.g. every Tuesday"
-              onChange={(e) => updateItem(i, 'count', e.target.value)}
-            />
-          </div>
-        </div>
-      ))}
+        );
+      })}
       <Field label="Caption below" value={slide.sub ?? ''} placeholder="Optional" onChange={(v) => onPatch({ sub: v })} full />
     </div>
   );
