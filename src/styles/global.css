@@ -1269,9 +1269,10 @@
     color: #2a1a00;
   }
 
-  /* Slide content (text, images, etc.) must render above the bg + fragment layer */
+  /* Slide content (text, images, etc.) must render above the bg + fragment layer.
+     The lightbox is a fullscreen overlay (position: fixed) and must opt out of this. */
   .slide { isolation: isolate; }
-  .slide > *:not(.fragment-layer):not(.slide-bg) {
+  .slide > *:not(.fragment-layer):not(.slide-bg):not(.photo-lightbox) {
     position: relative;
     z-index: 2;
   }
