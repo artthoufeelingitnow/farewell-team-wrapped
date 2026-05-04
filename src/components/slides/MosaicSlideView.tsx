@@ -66,7 +66,19 @@ export function MosaicSlideView({ slide }: { slide: MosaicSlide }) {
           role="dialog"
           aria-modal="true"
         >
+          <button
+            type="button"
+            className="photo-lightbox-close"
+            onClick={(e) => {
+              e.stopPropagation();
+              setExpandedSrc(null);
+            }}
+            aria-label="Close"
+          >
+            ×
+          </button>
           <img src={expandedSrc} alt="" />
+          <div className="photo-lightbox-hint">Tap anywhere or press Esc to close</div>
         </div>
       )}
     </>
