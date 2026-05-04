@@ -1,11 +1,17 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { MosaicSlide } from '../../types';
 import { usePlayerStore } from '../../store/playerStore';
+
+const SWIPE_DISMISS_PX = 100;
+const TAP_THRESHOLD_PX = 6;
 
 export function MosaicSlideView({ slide }: { slide: MosaicSlide }) {
   const photos = (slide.photos || []).filter(Boolean);
   const setPaused = usePlayerStore((s) => s.setPaused);
   const [expandedSrc, setExpandedSrc] = useState<string | null>(null);
+  const [dragY, setDragY] = useState(0);
+  const [dragging, setDragging] = useState(false);
+  const startYRef = useRef(0);
 
   // Pause auto-advance while a photo is expanded; ensure unpause on unmount.
   useEffect(() => {
@@ -25,6 +31,37 @@ export function MosaicSlideView({ slide }: { slide: MosaicSlide }) {
     document.addEventListener('keydown', onKey, true);
     return () => document.removeEventListener('keydown', onKey, true);
   }, [expandedSrc]);
+
+  const closeLightbox = () => {
+    setDragY(0);
+    setDragging(false);
+    setExpandedSrc(null);
+  };
+
+  const onLightboxPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    startYRef.current = e.clientY;
+    setDragging(true);
+    (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
+  };
+
+  const onLightboxPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!dragging) return;
+    const dy = e.clientY - startYRef.current;
+    setDragY(Math.max(0, dy)); // clamp upward drag — only downward dismisses
+  };
+
+  const onLightboxPointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!dragging) return;
+    setDragging(false);
+    (e.currentTarget as HTMLElement).releasePointerCapture?.(e.pointerId);
+    if (dragY >= SWIPE_DISMISS_PX || dragY < TAP_THRESHOLD_PX) {
+      // Either a successful swipe-down OR a tap (effectively no drag) — both close.
+      closeLightbox();
+    } else {
+      // Partial swipe — snap back.
+      setDragY(0);
+    }
+  };
 
   if (photos.length === 0) {
     return (
@@ -62,23 +99,30 @@ export function MosaicSlideView({ slide }: { slide: MosaicSlide }) {
       {expandedSrc && (
         <div
           className="photo-lightbox"
-          onClick={() => setExpandedSrc(null)}
           role="dialog"
           aria-modal="true"
+          onPointerDown={onLightboxPointerDown}
+          onPointerMove={onLightboxPointerMove}
+          onPointerUp={onLightboxPointerUp}
+          onPointerCancel={onLightboxPointerUp}
+          style={{
+            backgroundColor: dragY > 0
+              ? `rgba(0, 0, 0, ${Math.max(0.4, 0.92 - dragY / 400)})`
+              : undefined,
+          }}
         >
-          <button
-            type="button"
-            className="photo-lightbox-close"
-            onClick={(e) => {
-              e.stopPropagation();
-              setExpandedSrc(null);
+          <div className="photo-lightbox-grip" aria-hidden="true" />
+          <img
+            src={expandedSrc}
+            alt=""
+            style={{
+              transform: dragY > 0 ? `translateY(${dragY}px)` : undefined,
+              opacity: dragY > 0 ? Math.max(0.5, 1 - dragY / 300) : 1,
+              transition: dragging ? 'none' : 'transform 0.2s ease, opacity 0.2s ease',
             }}
-            aria-label="Close"
-          >
-            ×
-          </button>
-          <img src={expandedSrc} alt="" />
-          <div className="photo-lightbox-hint">Tap anywhere or press Esc to close</div>
+            draggable={false}
+          />
+          <div className="photo-lightbox-hint">Swipe down or tap to close</div>
         </div>
       )}
     </>

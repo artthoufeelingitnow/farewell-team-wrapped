@@ -758,29 +758,21 @@
     border-radius: 12px;
     box-shadow: 0 12px 48px rgba(0, 0, 0, 0.6);
   }
-  .photo-lightbox-close {
-    position: absolute;
-    top: 20px;
-    right: 20px;
-    background: rgba(255, 255, 255, 0.14);
-    border: 1px solid rgba(255, 255, 255, 0.25);
-    color: #fff;
-    width: 44px;
-    height: 44px;
-    border-radius: 50%;
-    cursor: pointer;
-    font-size: 26px;
-    line-height: 1;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    backdrop-filter: blur(6px);
-    transition: background 0.15s ease, transform 0.12s ease;
-    z-index: 1;
+  .photo-lightbox {
+    /* Prevent the page from scrolling/page-zooming during a swipe-down dismiss */
+    touch-action: none;
+    user-select: none;
   }
-  .photo-lightbox-close:hover {
-    background: rgba(255, 255, 255, 0.24);
-    transform: scale(1.06);
+  .photo-lightbox-grip {
+    position: absolute;
+    top: 12px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 48px;
+    height: 5px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.45);
+    pointer-events: none;
   }
   .photo-lightbox-hint {
     position: absolute;
