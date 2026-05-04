@@ -718,7 +718,9 @@
     border-radius: 8px;
     cursor: zoom-in;
     position: relative;
-    z-index: 5;
+    /* Above .nav-zone (z 4) so taps on edge photos open the lightbox instead
+       of registering as prev/next. Bumped above progress-bar (z 5) too. */
+    z-index: 7;
     animation: photo-float 4.5s ease-in-out infinite;
     transition: filter 180ms ease, box-shadow 180ms ease;
     filter: brightness(1);
@@ -732,11 +734,6 @@
   .photo-mosaic img:hover {
     filter: brightness(1.15);
     box-shadow: 0 6px 18px rgba(0,0,0,0.5), 0 0 0 2px rgba(255,255,255,0.35);
-  }
-
-  /* On touch devices the float animation makes photos a moving target — disable it */
-  @media (pointer: coarse) {
-    .photo-mosaic img { animation: none; }
   }
 
   @keyframes photo-float {
@@ -1312,8 +1309,12 @@
   }
 
   /* Slide content (text, images, etc.) must render above the bg + fragment layer.
-     The lightbox is a fullscreen overlay (position: fixed) and must opt out of this. */
-  .slide { isolation: isolate; }
+     We deliberately don't add `isolation: isolate` here so child z-indices (e.g.
+     mosaic photos at z 7) can compete with sibling overlays of the player like
+     .nav-zone (z 4). Without that, edge-column photos sit under the nav-zones
+     and tapping them advances the slide instead of opening the lightbox.
+     The lightbox is a fullscreen overlay (position: fixed) and opts out of the
+     content z-index so its position: fixed isn't overridden. */
   .slide > *:not(.fragment-layer):not(.slide-bg):not(.photo-lightbox) {
     position: relative;
     z-index: 2;
