@@ -120,7 +120,7 @@ export function MosaicSlideView({ slide }: { slide: MosaicSlide }) {
             }}
           >
             <img src={expandedSrc} alt="" draggable={false} />
-            <div className="photo-lightbox-hint">Swipe down or tap to close</div>
+            <div className="photo-lightbox-hint">Swipe down</div>
           </div>
         </div>
       )}
