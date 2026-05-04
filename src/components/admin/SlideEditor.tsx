@@ -1,6 +1,7 @@
 import type { Slide } from '../../types';
 import { SLIDE_TYPES } from '../../utils/constants';
 import { SlideFieldsEditor } from './SlideFieldsEditor';
+import { SlideStyleEditor } from './SlideStyleEditor';
 import { SongPicker } from './SongPicker';
 
 interface Props {
@@ -62,6 +63,7 @@ export function SlideEditor({ slide, index, isFirst, isLast, onPatch, onMove, on
         </div>
       </div>
 
+      <SlideStyleEditor slide={slide} onPatch={onPatch} />
       <SlideFieldsEditor slide={slide} onPatch={onPatch} />
       <SongPicker slide={slide} slideIndex={index} onPatch={onPatch} />
     </div>

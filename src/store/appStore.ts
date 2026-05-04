@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import type { AppData, Colleague, Slide } from '../types';
 import { STORAGE_KEY } from '../utils/constants';
+import { migrateAppData } from '../utils';
 import { showToast } from './toastStore';
 
 const EMPTY_DATA: AppData = {
@@ -12,11 +13,8 @@ function loadFromStorage(): AppData {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) {
-      const parsed = JSON.parse(raw) as AppData;
-      return {
-        meta: parsed.meta ?? EMPTY_DATA.meta,
-        colleagues: parsed.colleagues ?? [],
-      };
+      const parsed = JSON.parse(raw);
+      return migrateAppData(parsed);
     }
   } catch {
     // fall through
@@ -143,7 +141,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   loadFromExport: (data) => {
-    set({ data, isExportedFile: true });
+    set({ data: migrateAppData(data), isExportedFile: true });
     // Don't persist exported data to localStorage — viewers shouldn't accumulate state.
   },
 }));

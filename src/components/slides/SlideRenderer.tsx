@@ -1,5 +1,6 @@
 import type { Slide, Colleague } from '../../types';
-import { SLIDE_TYPES } from '../../utils/constants';
+import { FragmentLayer } from './FragmentLayer';
+import { SlideBackground, bgNeedsDarkText } from './SlideBackground';
 import { IntroSlideView } from './IntroSlideView';
 import { StatSlideView } from './StatSlideView';
 import { PhotoSlideView } from './PhotoSlideView';
@@ -17,10 +18,12 @@ interface Props {
 }
 
 export function SlideRenderer({ slide, colleague, onReplay, onClose }: Props) {
-  const bg = slide.bg || SLIDE_TYPES[slide.type]?.bg || 'bg-dark';
+  const darkText = bgNeedsDarkText(slide.bg);
 
   return (
-    <div className={`slide ${bg}`}>
+    <div className={`slide${darkText ? ' text-dark' : ''}`}>
+      <SlideBackground config={slide.bg} />
+      <FragmentLayer config={slide.fragments} />
       <SlideContent slide={slide} colleague={colleague} onReplay={onReplay} onClose={onClose} />
     </div>
   );

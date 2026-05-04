@@ -577,11 +577,13 @@
   .bg-orange { background: linear-gradient(135deg, #FF8C42 0%, #D32F2F 100%); }
   .bg-teal   { background: linear-gradient(135deg, #4ECDC4 0%, #1A535C 100%); }
   .bg-purple { background: linear-gradient(135deg, #B57EDC 0%, #5E2A8C 100%); }
-  .bg-yellow { background: linear-gradient(135deg, #FFC75F 0%, #F39C12 100%); color: #2a1a00; }
+  .bg-yellow { background: linear-gradient(135deg, #FFC75F 0%, #F39C12 100%); }
   .bg-green  { background: linear-gradient(135deg, #06D6A0 0%, #115E47 100%); }
   .bg-blue   { background: linear-gradient(135deg, #4FC3F7 0%, #1E3A8A 100%); }
   .bg-dark   { background: linear-gradient(135deg, #1a1a1a 0%, #000 100%); }
-  .bg-cream  { background: linear-gradient(135deg, #FFF8E7 0%, #F5DEB3 100%); color: #2a1a00; }
+  .bg-cream  { background: linear-gradient(135deg, #FFF8E7 0%, #F5DEB3 100%); }
+  /* Text color now driven by .slide.text-dark, set in JS based on bg config. */
+  .slide.text-dark { color: #2a1a00; }
 
   /* photo slide */
   .photo-frame {
@@ -759,8 +761,8 @@
     font-size: 14px;
   }
   .end-actions button:hover { background: rgba(255,255,255,0.32); }
-  .bg-yellow .end-actions button { background: rgba(0,0,0,0.2); color: #2a1a00; }
-  .bg-yellow .end-actions button:hover { background: rgba(0,0,0,0.32); }
+  .slide.text-dark .end-actions button { background: rgba(0,0,0,0.2); color: #2a1a00; }
+  .slide.text-dark .end-actions button:hover { background: rgba(0,0,0,0.32); }
 
   /* now-playing pill */
   .now-playing {
@@ -1112,3 +1114,357 @@
     25% { transform: translateX(-8px); }
     75% { transform: translateX(8px); }
   }
+
+  /* ============================================================
+     FRAGMENT LAYER — decorative animated overlays per slide
+     ============================================================ */
+  .fragment-layer {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+    pointer-events: none;
+    z-index: 1;
+  }
+  .fragment-layer .fragment {
+    position: absolute;
+    will-change: transform, opacity;
+    user-select: none;
+    line-height: 1;
+  }
+
+  /* Falling types: leaves, snow, petals, confetti.
+     Top is overridden by the keyframe so the inline top is irrelevant. */
+  @keyframes fragment-fall {
+    0%   { transform: translate3d(0, -120vh, 0) rotate(0deg); }
+    100% { transform: translate3d(var(--drift, 0px), 120vh, 0) rotate(720deg); }
+  }
+  @keyframes fragment-fall-slow {
+    0%   { transform: translate3d(0, -120vh, 0) rotate(0deg); }
+    100% { transform: translate3d(var(--drift, 0px), 120vh, 0) rotate(360deg); }
+  }
+  @keyframes fragment-fall-flip {
+    0%   { transform: translate3d(0, -120vh, 0) rotateY(0deg) rotate(0deg); }
+    100% { transform: translate3d(var(--drift, 0px), 120vh, 0) rotateY(1080deg) rotate(540deg); }
+  }
+  @keyframes fragment-rise {
+    0%   { transform: translate3d(0, 120vh, 0); opacity: 0; }
+    10%  { opacity: 0.85; }
+    90%  { opacity: 0.85; }
+    100% { transform: translate3d(var(--drift, 0px), -120vh, 0); opacity: 0; }
+  }
+  @keyframes fragment-twinkle {
+    0%, 100% { opacity: 0; transform: scale(0.6); }
+    50%      { opacity: 1; transform: scale(1.1); }
+  }
+
+  .fragment-pattern-fall      .fragment { animation: fragment-fall      linear infinite; }
+  .fragment-pattern-fall-slow .fragment { animation: fragment-fall-slow linear infinite; }
+  .fragment-pattern-flip-fall .fragment { animation: fragment-fall-flip linear infinite; }
+  .fragment-pattern-rise      .fragment { animation: fragment-rise      ease-in-out infinite; }
+  .fragment-pattern-twinkle   .fragment { animation: fragment-twinkle   ease-in-out infinite; }
+  .fragment-pattern-drift     .fragment { animation: fragment-drift     ease-in-out infinite; }
+  .fragment-img { object-fit: contain; pointer-events: none; }
+
+  @keyframes fragment-drift {
+    0%   { transform: translate(0, 0); }
+    25%  { transform: translate(60px, -40px); }
+    50%  { transform: translate(-50px, 40px); }
+    75%  { transform: translate(40px, 70px); }
+    100% { transform: translate(0, 0); }
+  }
+
+  /* ============================================================
+     ADMIN — background swatch picker + fragment picker
+     ============================================================ */
+  .style-editor {
+    background: rgba(0,0,0,0.25);
+    border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 10px;
+    padding: 10px 12px;
+    margin-bottom: 12px;
+  }
+  .style-editor + .style-editor {
+    margin-top: -4px;
+  }
+  .style-editor .field-label {
+    margin-bottom: 8px;
+  }
+  .swatches-row {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .swatch {
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    cursor: pointer;
+    border: 2px solid transparent;
+    padding: 0;
+    transition: transform 0.12s ease, border-color 0.12s ease;
+  }
+  .swatch:hover { transform: scale(1.08); }
+  .swatch.active {
+    border-color: #fff;
+    transform: scale(1.12);
+    box-shadow: 0 0 0 2px rgba(255,199,95,0.4);
+  }
+
+  .fragment-picker-row {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    margin-bottom: 8px;
+  }
+  .fragment-option {
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.1);
+    color: rgba(255,255,255,0.85);
+    padding: 6px 12px;
+    border-radius: 999px;
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    transition: all 0.12s ease;
+  }
+  .fragment-option:hover {
+    background: rgba(255,255,255,0.12);
+    border-color: rgba(255,255,255,0.25);
+  }
+  .fragment-option.active {
+    background: rgba(255,199,95,0.2);
+    border-color: #FFC75F;
+    color: #FFC75F;
+  }
+  .fragment-option .frag-emoji {
+    font-size: 14px;
+    line-height: 1;
+  }
+
+  .density-row {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    font-size: 12px;
+    color: rgba(255,255,255,0.6);
+  }
+  .density-btn {
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.1);
+    color: rgba(255,255,255,0.75);
+    padding: 4px 10px;
+    border-radius: 999px;
+    cursor: pointer;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: capitalize;
+  }
+  .density-btn:hover { background: rgba(255,255,255,0.1); }
+  .density-btn.active {
+    background: #FFC75F;
+    border-color: #FFC75F;
+    color: #2a1a00;
+  }
+
+  /* Slide content (text, images, etc.) must render above the bg + fragment layer */
+  .slide { isolation: isolate; }
+  .slide > *:not(.fragment-layer):not(.slide-bg) {
+    position: relative;
+    z-index: 2;
+  }
+
+  /* ============================================================
+     SLIDE BACKGROUND LAYER (preset / custom gradient / lava)
+     ============================================================ */
+  .slide-bg {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    overflow: hidden;
+  }
+
+  .lava-bg .lava-blobs {
+    position: absolute;
+    inset: -10%;
+    pointer-events: none;
+  }
+  .lava-blob {
+    position: absolute;
+    width: 60%;
+    aspect-ratio: 1;
+    border-radius: 50%;
+    mix-blend-mode: screen;
+    opacity: 0.95;
+    will-change: transform;
+  }
+  .lava-blob-0 { animation: lava-drift-0 ease-in-out infinite; }
+  .lava-blob-1 { animation: lava-drift-1 ease-in-out infinite; }
+  .lava-blob-2 { animation: lava-drift-2 ease-in-out infinite; }
+  .lava-blob-3 { animation: lava-drift-3 ease-in-out infinite; }
+  .lava-blob-4 { animation: lava-drift-4 ease-in-out infinite; }
+
+  @keyframes lava-drift-0 {
+    0%, 100% { transform: translate(-20%, -20%) scale(1); }
+    33%      { transform: translate(60%, 30%)  scale(1.2); }
+    66%      { transform: translate(20%, 60%)  scale(0.9); }
+  }
+  @keyframes lava-drift-1 {
+    0%, 100% { transform: translate(50%, -10%) scale(1.1); }
+    33%      { transform: translate(-10%, 50%) scale(0.85); }
+    66%      { transform: translate(40%, 40%)  scale(1.15); }
+  }
+  @keyframes lava-drift-2 {
+    0%, 100% { transform: translate(20%, 50%)  scale(0.95); }
+    33%      { transform: translate(50%, 0%)   scale(1.25); }
+    66%      { transform: translate(-10%, 20%) scale(1); }
+  }
+  @keyframes lava-drift-3 {
+    0%, 100% { transform: translate(60%, 60%)  scale(1.1); }
+    33%      { transform: translate(20%, 10%)  scale(0.9); }
+    66%      { transform: translate(50%, 50%)  scale(1.2); }
+  }
+  @keyframes lava-drift-4 {
+    0%, 100% { transform: translate(-10%, 30%) scale(1); }
+    33%      { transform: translate(40%, -10%) scale(1.15); }
+    66%      { transform: translate(10%, 40%)  scale(0.95); }
+  }
+
+  /* ============================================================
+     ADMIN — bg picker tabs, color inputs, lava controls
+     ============================================================ */
+  .bg-tabs {
+    display: flex;
+    gap: 4px;
+    background: rgba(0,0,0,0.3);
+    border-radius: 8px;
+    padding: 3px;
+    margin-bottom: 10px;
+  }
+  .bg-tab {
+    flex: 1;
+    background: transparent;
+    border: none;
+    color: rgba(255,255,255,0.6);
+    padding: 6px 10px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.12s ease;
+  }
+  .bg-tab:hover { color: rgba(255,255,255,0.9); }
+  .bg-tab.active {
+    background: rgba(255,199,95,0.18);
+    color: #FFC75F;
+  }
+
+  .color-row {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    gap: 8px;
+    align-items: center;
+    margin-bottom: 8px;
+  }
+  .color-row label {
+    font-size: 12px;
+    color: rgba(255,255,255,0.7);
+    min-width: 60px;
+  }
+  .color-row input[type="color"] {
+    width: 40px;
+    height: 28px;
+    padding: 0;
+    border: 1px solid rgba(255,255,255,0.15);
+    border-radius: 6px;
+    background: transparent;
+    cursor: pointer;
+  }
+  .color-row .hex-input {
+    background: rgba(0,0,0,0.4);
+    border: 1px solid rgba(255,255,255,0.1);
+    color: #fff;
+    border-radius: 6px;
+    padding: 5px 8px;
+    font-size: 12px;
+    font-family: ui-monospace, monospace;
+    width: 84px;
+  }
+
+  .slider-row {
+    display: grid;
+    grid-template-columns: 80px 1fr 50px;
+    gap: 8px;
+    align-items: center;
+    margin-bottom: 6px;
+    font-size: 12px;
+    color: rgba(255,255,255,0.7);
+  }
+  .slider-row input[type="range"] {
+    accent-color: #FFC75F;
+  }
+
+  .blob-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 6px;
+  }
+  .blob-row input[type="color"] {
+    width: 30px; height: 24px; padding: 0;
+    border: 1px solid rgba(255,255,255,0.15); border-radius: 5px;
+    background: transparent; cursor: pointer;
+  }
+  .blob-row .icon-btn { width: 22px; height: 22px; font-size: 12px; }
+
+  .add-blob-btn {
+    background: rgba(255,255,255,0.05);
+    border: 1px dashed rgba(255,255,255,0.18);
+    color: rgba(255,255,255,0.7);
+    padding: 5px 10px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 12px;
+    margin-top: 4px;
+  }
+  .add-blob-btn:hover { background: rgba(255,255,255,0.1); }
+  .add-blob-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  .fragment-image-thumb {
+    width: 40px; height: 40px;
+    object-fit: cover;
+    border-radius: 6px;
+    border: 1px solid rgba(255,255,255,0.15);
+    margin-right: 8px;
+    vertical-align: middle;
+  }
+
+  /* Gallery of uploaded fragment images, with remove buttons */
+  .fragment-image-gallery {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(48px, 1fr));
+    gap: 6px;
+    margin-bottom: 8px;
+  }
+  .fragment-image-cell {
+    position: relative;
+    aspect-ratio: 1;
+    border-radius: 6px;
+    overflow: hidden;
+    background: rgba(0,0,0,0.4);
+    border: 1px solid rgba(255,255,255,0.12);
+  }
+  .fragment-image-cell img {
+    width: 100%; height: 100%; object-fit: cover;
+    display: block;
+  }
+  .fragment-image-cell .icon-btn.danger {
+    position: absolute;
+    top: 2px; right: 2px;
+    width: 20px; height: 20px;
+    font-size: 12px;
+    background: rgba(0,0,0,0.6);
+  }
+  .fragment-image-cell .icon-btn.danger:hover { background: rgba(255,77,77,0.7); }

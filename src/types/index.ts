@@ -48,8 +48,73 @@ export interface AdminTransientFields {
   songSearching?: boolean;
 }
 
+export type FragmentType =
+  | 'leaves'
+  | 'bubbles'
+  | 'snow'
+  | 'sparkles'
+  | 'confetti'
+  | 'petals'
+  | 'stars';
+
+export type FragmentDensity = 'sparse' | 'medium' | 'dense';
+
+export type FragmentPattern =
+  | 'fall'
+  | 'fall-slow'
+  | 'flip-fall'
+  | 'rise'
+  | 'twinkle'
+  | 'drift';
+
+export type FragmentSource =
+  | { kind: 'preset'; type: FragmentType }
+  | { kind: 'image'; dataUrls: string[] };
+
+export interface FragmentConfig {
+  source: FragmentSource;
+  pattern: FragmentPattern;
+  density: FragmentDensity;
+}
+
+export type TextColor = 'light' | 'dark';
+
+export type GradientShape = 'linear' | 'radial';
+
+export interface PresetBg {
+  kind: 'preset';
+  preset: SlideBg;
+}
+
+export interface GradientBg {
+  kind: 'gradient';
+  from: string; // hex
+  to: string; // hex
+  angle: number; // 0-360
+  shape: GradientShape;
+  textColor: TextColor;
+}
+
+export interface LavaBlob {
+  color: string; // hex
+}
+
+export type LavaSpeed = 'slow' | 'medium' | 'fast';
+
+export interface LavaBg {
+  kind: 'lava';
+  baseColor: string; // hex
+  blobs: LavaBlob[]; // 2-6
+  speed: LavaSpeed;
+  blur: number; // px, ~30-150
+  textColor: TextColor;
+}
+
+export type BgConfig = PresetBg | GradientBg | LavaBg;
+
 interface SlideBase extends SongFields, AdminTransientFields {
-  bg: SlideBg;
+  bg: BgConfig;
+  fragments?: FragmentConfig;
 }
 
 export interface IntroSlide extends SlideBase {
