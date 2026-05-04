@@ -1,6 +1,6 @@
 /**
  * Composites the live orb canvas into a square share-card with the colleague's
- * name + a "made with care" caption, then triggers a PNG download.
+ * name as a title, then triggers a PNG download.
  */
 export function saveOrbImage(orbCanvas: HTMLCanvasElement, name: string): void {
   const SIZE = 1080;
@@ -20,20 +20,14 @@ export function saveOrbImage(orbCanvas: HTMLCanvasElement, name: string): void {
   // Orb — drawn centered, taking ~62% of width.
   const orbSize = Math.round(SIZE * 0.62);
   const ox = (SIZE - orbSize) / 2;
-  const oy = Math.round(SIZE * 0.16);
+  const oy = Math.round(SIZE * 0.18);
   ctx.drawImage(orbCanvas, ox, oy, orbSize, orbSize);
 
   // Title — Jua, big.
   ctx.fillStyle = '#ffffff';
   ctx.textAlign = 'center';
   ctx.font = '600 64px "Jua", "Helvetica Neue", sans-serif';
-  ctx.fillText(`${name}'s Wrapped 2026`, SIZE / 2, SIZE - 130);
-
-  // Caption — Nunito, smaller, dimmed.
-  ctx.fillStyle = 'rgba(255,255,255,0.55)';
-  ctx.font = '500 26px "Nunito", "Helvetica Neue", sans-serif';
-  ctx.letterSpacing = '4px';
-  ctx.fillText('made with care', SIZE / 2, SIZE - 80);
+  ctx.fillText(`${name}'s Wrapped`, SIZE / 2, SIZE - 110);
 
   // Convert to PNG + trigger download.
   const dataUrl = exportCanvas.toDataURL('image/png');
