@@ -5,6 +5,7 @@ interface PlayerState {
   slideIndex: number;
   isPreviewMode: boolean;
   audioEnabled: boolean;
+  paused: boolean;
   unlockedColleagueIds: Set<string>;
 
   openPlayer: (colleagueId: string, opts?: { preview?: boolean }) => void;
@@ -13,6 +14,7 @@ interface PlayerState {
   prevSlide: () => void;
   setSlideIndex: (i: number) => void;
   toggleAudio: () => void;
+  setPaused: (p: boolean) => void;
   markUnlocked: (colleagueId: string) => void;
 }
 
@@ -21,12 +23,19 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   slideIndex: 0,
   isPreviewMode: false,
   audioEnabled: true,
+  paused: false,
   unlockedColleagueIds: new Set(),
 
   openPlayer: (colleagueId, opts) =>
-    set({ currentColleagueId: colleagueId, slideIndex: 0, isPreviewMode: !!opts?.preview }),
+    set({
+      currentColleagueId: colleagueId,
+      slideIndex: 0,
+      isPreviewMode: !!opts?.preview,
+      paused: false,
+    }),
 
-  closePlayer: () => set({ currentColleagueId: null, slideIndex: 0, isPreviewMode: false }),
+  closePlayer: () =>
+    set({ currentColleagueId: null, slideIndex: 0, isPreviewMode: false, paused: false }),
 
   nextSlide: (totalSlides) => {
     const { slideIndex } = get();
@@ -41,6 +50,8 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   setSlideIndex: (i) => set({ slideIndex: i }),
 
   toggleAudio: () => set((s) => ({ audioEnabled: !s.audioEnabled })),
+
+  setPaused: (paused) => set({ paused }),
 
   markUnlocked: (colleagueId) =>
     set((s) => ({ unlockedColleagueIds: new Set([...s.unlockedColleagueIds, colleagueId]) })),

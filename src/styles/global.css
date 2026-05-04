@@ -303,6 +303,21 @@
   .slides-section {
     margin-top: 12px;
   }
+  .editor-sticky-header {
+    position: sticky;
+    top: 0;
+    z-index: 5;
+    background:
+      linear-gradient(rgba(0,0,0,0.3), rgba(0,0,0,0.3)),
+      #0d0d12;
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 12px;
+    padding: 14px;
+    margin-bottom: 12px;
+  }
+  .editor-sticky-header .col-fields { margin-bottom: 14px; }
+  .editor-sticky-header .slides-section-header { margin-bottom: 0; }
+
   .slides-section-header {
     display: flex;
     justify-content: space-between;
@@ -699,6 +714,31 @@
     width: 100%; height: 100%;
     object-fit: cover;
     border-radius: 8px;
+    cursor: zoom-in;
+    position: relative;
+    z-index: 5;
+    transition: transform 180ms ease;
+  }
+  .photo-mosaic img:hover { transform: scale(1.04); }
+
+  .photo-lightbox {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.92);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 60;
+    cursor: zoom-out;
+    animation: fadeIn 180ms ease;
+    padding: 24px;
+  }
+  .photo-lightbox img {
+    max-width: 92vw;
+    max-height: 92vh;
+    object-fit: contain;
+    border-radius: 12px;
+    box-shadow: 0 12px 48px rgba(0, 0, 0, 0.6);
   }
 
   .end-actions {
@@ -819,8 +859,8 @@
   .song-picker {
     background: rgba(0,0,0,0.4);
     border: 1px solid rgba(255,255,255,0.1);
-    border-radius: 10px;
-    padding: 12px;
+    border-radius: 12px;
+    padding: 14px;
     margin-top: 8px;
   }
   .song-search-row {
@@ -911,27 +951,99 @@
   .song-current .info .a { font-size: 11px; opacity: 0.7; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
   .song-controls {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 8px;
-    margin-top: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-top: 10px;
   }
   .song-controls label {
     font-size: 11px;
     color: rgba(255,255,255,0.6);
     text-transform: uppercase;
     letter-spacing: 0.5px;
-    margin-bottom: 4px;
+    margin-bottom: 6px;
     display: block;
   }
-  .song-controls input {
-    width: 100%;
+  .song-control-row.row-inline {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  .song-control-row.row-inline label { margin: 0; }
+  .song-duration-select {
     background: rgba(0,0,0,0.4);
     border: 1px solid rgba(255,255,255,0.1);
     color: #fff;
     border-radius: 6px;
-    padding: 6px 10px;
+    padding: 6px 28px 6px 10px;
     font-size: 13px;
+    font-family: inherit;
+    cursor: pointer;
+    -webkit-appearance: none;
+    appearance: none;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'><path d='M1 1l4 4 4-4' stroke='rgba(255,255,255,0.6)' stroke-width='1.5' fill='none' stroke-linecap='round'/></svg>");
+    background-repeat: no-repeat;
+    background-position: right 10px center;
+  }
+  .song-duration-select:focus {
+    outline: none;
+    border-color: rgba(78,205,196,0.6);
+  }
+  .song-duration-select option {
+    background: #1a1a1a;
+    color: #fff;
+  }
+  .song-start-slider { width: 100%; }
+  .song-start-track {
+    position: relative;
+    height: 40px;
+    background: rgba(0,0,0,0.4);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 8px;
+    cursor: grab;
+    touch-action: none;
+    overflow: hidden;
+    user-select: none;
+  }
+  .song-start-track:active { cursor: grabbing; }
+  .song-start-track.is-locked { cursor: default; }
+  .song-start-bars {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    padding: 0 6px;
+    gap: 2px;
+    pointer-events: none;
+  }
+  .song-start-bar {
+    flex: 1;
+    background: rgba(255,255,255,0.18);
+    border-radius: 1px;
+    min-width: 1px;
+    transition: background 100ms;
+  }
+  .song-start-bar.in-window {
+    background: rgba(78,205,196,0.95);
+  }
+  .song-start-window {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    background: rgba(78,205,196,0.14);
+    border: 1.5px solid rgba(78,205,196,0.85);
+    border-radius: 6px;
+    pointer-events: none;
+    box-shadow: 0 0 0 1px rgba(0,0,0,0.4) inset;
+  }
+  .song-start-meta {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 4px;
+    font-size: 11px;
+    color: rgba(255,255,255,0.5);
+    font-variant-numeric: tabular-nums;
   }
 
   .itunes-credit {

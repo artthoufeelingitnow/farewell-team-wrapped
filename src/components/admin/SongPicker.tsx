@@ -1,56 +1,145 @@
-import { useEffect, useReducer, useState } from 'react';
+import { useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import type { Slide, ItunesResult } from '../../types';
 import { useItunesSearch } from '../../hooks/useItunesSearch';
-import { previewSong, stopPreviewAudio, getPreviewKey } from '../../hooks/audioEngine';
+import {
+  previewSong,
+  stopPreviewAudio,
+  getPreviewKey,
+  seekPreviewAudio,
+} from '../../hooks/audioEngine';
 import { showToast } from '../../store/toastStore';
 import { DEFAULT_SLIDE_DURATION } from '../../utils/constants';
 
-/**
- * Number input that lets the user clear/edit freely, only clamping + committing on blur.
- * Reverts to the last committed value if the user blurs with an empty/invalid input.
- */
-function ClampedNumberInput({
-  value,
-  min,
-  max,
+const PREVIEW_TOTAL_SEC = 30;
+const DURATION_OPTIONS_SEC = [5, 7, 10, 12, 15, 20, 25, 30];
+const WAVEFORM_BAR_COUNT = 56;
+
+// Deterministic pseudo-random heights so the decorative waveform stays stable
+// across renders. Same shape regardless of song.
+function generateBarHeights(count: number): number[] {
+  const arr: number[] = [];
+  let seed = 12345;
+  for (let i = 0; i < count; i++) {
+    seed = (seed * 9301 + 49297) % 233280;
+    const r = seed / 233280;
+    arr.push(0.3 + r * 0.7);
+  }
+  return arr;
+}
+
+interface StartWindowSliderProps {
+  start: number; // seconds
+  durationMs: number;
+  songUrl: string;
+  previewKey: string;
+  onCommit: (sec: number) => void;
+  onPreviewStateChange: () => void;
+}
+
+function StartWindowSlider({
+  start,
+  durationMs,
+  songUrl,
+  previewKey,
   onCommit,
-}: {
-  value: number;
-  min: number;
-  max: number;
-  onCommit: (val: number) => void;
-}) {
-  const [draft, setDraft] = useState(String(value));
+  onPreviewStateChange,
+}: StartWindowSliderProps) {
+  const trackRef = useRef<HTMLDivElement | null>(null);
+  const [dragging, setDragging] = useState(false);
+  const [localStart, setLocalStart] = useState(start);
 
-  // Resync if the committed value changes from outside (e.g., picking a new song).
+  const durSec = durationMs / 1000;
+  const maxStart = Math.max(0, PREVIEW_TOTAL_SEC - durSec);
+
+  // Resync from prop whenever the committed value changes externally (e.g. duration
+  // change forced a clamp, or a different slide selected). Skip while user is dragging.
   useEffect(() => {
-    setDraft(String(value));
-  }, [value]);
+    if (!dragging) setLocalStart(Math.min(start, maxStart));
+  }, [start, dragging, maxStart]);
 
-  const commit = () => {
-    const parsed = parseInt(draft, 10);
-    if (Number.isNaN(parsed)) {
-      setDraft(String(value));
-      return;
+  const startPct = (localStart / PREVIEW_TOTAL_SEC) * 100;
+  const windowPct = (durSec / PREVIEW_TOTAL_SEC) * 100;
+
+  const heights = useMemo(() => generateBarHeights(WAVEFORM_BAR_COUNT), []);
+
+  const secFromClientX = (clientX: number): number => {
+    const track = trackRef.current;
+    if (!track) return localStart;
+    const rect = track.getBoundingClientRect();
+    if (rect.width === 0) return localStart;
+    const ratio = (clientX - rect.left) / rect.width;
+    // Center the window on the cursor, IG-style.
+    const sec = ratio * PREVIEW_TOTAL_SEC - durSec / 2;
+    return Math.max(0, Math.min(maxStart, sec));
+  };
+
+  const ensurePreviewAt = (sec: number) => {
+    if (getPreviewKey() === previewKey) {
+      seekPreviewAudio(sec);
+    } else {
+      previewSong(songUrl, sec, previewKey, onPreviewStateChange);
+      onPreviewStateChange();
     }
-    const clamped = Math.max(min, Math.min(max, parsed));
-    setDraft(String(clamped));
-    if (clamped !== value) onCommit(clamped);
+  };
+
+  const onPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (maxStart === 0) return; // window fills the bar — nothing to drag
+    e.preventDefault();
+    (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
+    setDragging(true);
+    const sec = secFromClientX(e.clientX);
+    setLocalStart(sec);
+    ensurePreviewAt(sec);
+  };
+
+  const onPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!dragging) return;
+    const sec = secFromClientX(e.clientX);
+    setLocalStart(sec);
+    if (getPreviewKey() === previewKey) seekPreviewAudio(sec);
+  };
+
+  const finishDrag = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!dragging) return;
+    setDragging(false);
+    (e.currentTarget as HTMLElement).releasePointerCapture?.(e.pointerId);
+    onCommit(Math.round(localStart * 10) / 10);
   };
 
   return (
-    <input
-      type="number"
-      min={min}
-      max={max}
-      step={1}
-      value={draft}
-      onChange={(e) => setDraft(e.target.value)}
-      onBlur={commit}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
-      }}
-    />
+    <div className="song-start-slider">
+      <div
+        ref={trackRef}
+        className={`song-start-track${maxStart === 0 ? ' is-locked' : ''}`}
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={finishDrag}
+        onPointerCancel={finishDrag}
+      >
+        <div className="song-start-bars">
+          {heights.map((h, i) => {
+            const barCenterPct = ((i + 0.5) / WAVEFORM_BAR_COUNT) * 100;
+            const inWindow =
+              barCenterPct >= startPct && barCenterPct <= startPct + windowPct;
+            return (
+              <span
+                key={i}
+                className={`song-start-bar${inWindow ? ' in-window' : ''}`}
+                style={{ height: `${h * 100}%` }}
+              />
+            );
+          })}
+        </div>
+        <div
+          className="song-start-window"
+          style={{ left: `${startPct}%`, width: `${windowPct}%` }}
+        />
+      </div>
+      <div className="song-start-meta">
+        <span>{localStart.toFixed(1)}s</span>
+        <span>{(localStart + durSec).toFixed(1)}s</span>
+      </div>
+    </div>
   );
 }
 
@@ -139,22 +228,38 @@ export function SongPicker({ slide, slideIndex, onPatch }: Props) {
             </button>
           </div>
           <div className="song-controls">
-            <div>
-              <label>Start at (sec, 0–25)</label>
-              <ClampedNumberInput
-                value={start}
-                min={0}
-                max={25}
-                onCommit={(v) => onPatch({ songStart: v })}
-              />
-            </div>
-            <div>
-              <label>Slide duration (sec)</label>
-              <ClampedNumberInput
+            <div className="song-control-row row-inline">
+              <label>Slide duration</label>
+              <select
+                className="song-duration-select"
                 value={Math.round(duration / 1000)}
-                min={3}
-                max={30}
-                onCommit={(v) => onPatch({ songDuration: v * 1000 })}
+                onChange={(e) => {
+                  const newSec = parseInt(e.target.value, 10);
+                  const newMs = newSec * 1000;
+                  const maxStart = Math.max(0, PREVIEW_TOTAL_SEC - newSec);
+                  if (start > maxStart) {
+                    onPatch({ songDuration: newMs, songStart: maxStart });
+                  } else {
+                    onPatch({ songDuration: newMs });
+                  }
+                }}
+              >
+                {DURATION_OPTIONS_SEC.map((s) => (
+                  <option key={s} value={s}>
+                    {s}s
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="song-control-row">
+              <label>Start position</label>
+              <StartWindowSlider
+                start={start}
+                durationMs={duration}
+                songUrl={slide.songUrl}
+                previewKey={currentKey}
+                onCommit={(sec) => onPatch({ songStart: sec })}
+                onPreviewStateChange={refresh}
               />
             </div>
           </div>

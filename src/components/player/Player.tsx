@@ -10,6 +10,7 @@ export function Player() {
   const currentColleagueId = usePlayerStore((s) => s.currentColleagueId);
   const slideIndex = usePlayerStore((s) => s.slideIndex);
   const audioEnabled = usePlayerStore((s) => s.audioEnabled);
+  const paused = usePlayerStore((s) => s.paused);
   const setSlideIndex = usePlayerStore((s) => s.setSlideIndex);
   const nextSlideAction = usePlayerStore((s) => s.nextSlide);
   const prevSlideAction = usePlayerStore((s) => s.prevSlide);
@@ -33,6 +34,7 @@ export function Player() {
   // Progress bar + auto-advance
   useEffect(() => {
     if (!colleague || !slide) return;
+    if (paused) return;
     if (isLast) {
       if (fillRef.current) fillRef.current.style.width = '100%';
       return;
@@ -49,12 +51,13 @@ export function Player() {
       }
     }, 50);
     return () => clearInterval(timer);
-  }, [slideIndex, slide, colleague, isLast, nextSlideAction]);
+  }, [slideIndex, slide, colleague, isLast, nextSlideAction, paused]);
 
   // Keyboard shortcuts
   useEffect(() => {
     if (!colleague) return;
     const onKey = (e: KeyboardEvent) => {
+      if (paused) return;
       if (e.key === 'ArrowRight' || e.key === ' ') {
         e.preventDefault();
         nextSlideAction(colleague.slides.length);
@@ -68,7 +71,7 @@ export function Player() {
     };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
-  }, [colleague, nextSlideAction, prevSlideAction, closePlayer, toggleAudio]);
+  }, [colleague, nextSlideAction, prevSlideAction, closePlayer, toggleAudio, paused]);
 
   if (!colleague || !slide) {
     // Either nothing to play or colleague disappeared — close.
@@ -97,8 +100,18 @@ export function Player() {
         ×
       </button>
 
-      <div className="nav-zone left" onClick={prevSlideAction} />
-      <div className="nav-zone right" onClick={() => nextSlideAction(colleague.slides.length)} />
+      <div
+        className="nav-zone left"
+        onClick={() => {
+          if (!paused) prevSlideAction();
+        }}
+      />
+      <div
+        className="nav-zone right"
+        onClick={() => {
+          if (!paused) nextSlideAction(colleague.slides.length);
+        }}
+      />
 
       <SlideRenderer
         slide={slide}

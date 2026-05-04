@@ -51,32 +51,32 @@ export function ColleagueEditor({ colleague }: Props) {
 
   return (
     <>
-      <div className="col-fields">
-        <div>
-          <label className="field-label">Name</label>
-          <input
-            type="text"
-            className="field-input"
-            value={colleague.name}
-            placeholder="e.g. LS, Marcus, Sarah"
-            onChange={(e) => updateColleague(colleague.id, { name: e.target.value })}
-          />
+      <div className="editor-sticky-header">
+        <div className="col-fields">
+          <div>
+            <label className="field-label">Name</label>
+            <input
+              type="text"
+              className="field-input"
+              value={colleague.name}
+              placeholder="e.g. LS, Marcus, Sarah"
+              onChange={(e) => updateColleague(colleague.id, { name: e.target.value })}
+            />
+          </div>
+          <div>
+            <label className="field-label">
+              Password {colleague.passwordHash ? '(set ✓)' : ''}
+            </label>
+            <input
+              type="text"
+              className="field-input"
+              value={pendingPassword}
+              placeholder={colleague.passwordHash ? 'Leave blank to keep' : 'Set a password'}
+              onChange={(e) => setPendingPassword(e.target.value)}
+            />
+          </div>
         </div>
-        <div>
-          <label className="field-label">
-            Password {colleague.passwordHash ? '(set ✓)' : ''}
-          </label>
-          <input
-            type="text"
-            className="field-input"
-            value={pendingPassword}
-            placeholder={colleague.passwordHash ? 'Leave blank to keep' : 'Set a password'}
-            onChange={(e) => setPendingPassword(e.target.value)}
-          />
-        </div>
-      </div>
 
-      <div className="slides-section">
         <div className="slides-section-header">
           <h3>Slides ({slides.length})</h3>
           <div style={{ display: 'flex', gap: '6px' }}>
@@ -95,7 +95,9 @@ export function ColleagueEditor({ colleague }: Props) {
             </button>
           </div>
         </div>
+      </div>
 
+      <div className="slides-section">
         {slides.map((s, i) => (
           <SlideEditor
             key={i}

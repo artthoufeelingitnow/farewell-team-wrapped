@@ -195,6 +195,15 @@ export function previewSong(
   return true;
 }
 
+export function seekPreviewAudio(sec: number): void {
+  if (!previewEl) return;
+  try {
+    previewEl.currentTime = Math.max(0, sec);
+  } catch {
+    // ignore — metadata may not be loaded yet
+  }
+}
+
 export function stopPreviewAudio(): void {
   if (previewEl) {
     if (previewListener) previewEl.removeEventListener('ended', previewListener);
