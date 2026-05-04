@@ -614,11 +614,22 @@
 
   /* quote slide */
   .quote-mark {
+    position: absolute;
     font-family: var(--font-display);
-    font-size: 80px;
-    line-height: 0.5;
-    opacity: 0.4;
-    margin-bottom: 8px;
+    font-size: clamp(90px, 14vw, 180px);
+    line-height: 1;
+    opacity: 0.32;
+    pointer-events: none;
+    user-select: none;
+    z-index: 2;
+  }
+  .quote-mark-open {
+    top: 6%;
+    left: 6%;
+  }
+  .quote-mark-close {
+    bottom: 6%;
+    right: 6%;
   }
   .quote-body {
     font-family: var(--font-display);
@@ -1319,7 +1330,7 @@
      content z-index so its position: fixed isn't overridden.
      The photo-mosaic is also excluded so it doesn't form a stacking context that
      would trap its child imgs' z-index 7 below the player's nav-zones (z 4). */
-  .slide > *:not(.fragment-layer):not(.slide-bg):not(.photo-lightbox):not(.photo-mosaic) {
+  .slide > *:not(.fragment-layer):not(.slide-bg):not(.photo-lightbox):not(.photo-mosaic):not(.quote-mark) {
     position: relative;
     z-index: 2;
   }
