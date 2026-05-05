@@ -17,7 +17,8 @@ export type SlideType =
   | 'podium'
   | 'letter'
   | 'mosaic'
-  | 'wrapped-finale'
+  | 'spirit-animal'
+  | 'soundtrack'
   | 'signoff';
 
 export interface PodiumItem {
@@ -188,14 +189,51 @@ export interface SignoffSlide extends SlideBase {
   sub?: string;
 }
 
-/** Curated finale slide. Reads from the colleague's `spiritAnimal*` fields and
- *  derives the soundtrack list from the rest of their slides at render time. */
-export interface WrappedFinaleSlide extends SlideBase {
-  type: 'wrapped-finale';
-  /** Curated subset of soundtrack tracks to feature on the keepsake card.
-   *  Each entry is a `name|artist` key matching the dedupe key used by
-   *  `getSoundtrack()`. Capped at 5. When `undefined`, the view auto-picks
-   *  the first 5 songs from the deck (preserves zero-config behavior). */
+/** A single section within a SpiritAnimalSlide — left or right column.
+ *  Each holds its own media, crop position, and caption. The slide-level
+ *  `title` carries the spirit animal name (which used to live per-section). */
+export interface SpiritAnimalSection {
+  media?: MediaItem;
+  /** `object-position` percentages 0–100. Default 50/50. Resets when media changes. */
+  mediaPosition?: { x: number; y: number };
+  caption?: string;
+}
+
+/** Font choice for keepsake card titles. 'display' = Jua (default), 'spotify' =
+ *  Montserrat 900 lowercase, Spotify-Wrapped style. */
+export type TitleFontKind = 'display' | 'spotify';
+
+/** Two-column keepsake card: side-by-side media slots with optional captions,
+ *  plus a slide-level eyebrow + title and a tagline + optional caption at the
+ *  bottom. Saveable as a PNG via the html-to-image flow. */
+export interface SpiritAnimalSlide extends SlideBase {
+  type: 'spirit-animal';
+  /** Small-caps eyebrow rendered above the title.
+   *  Default: "this is you if you were a cat...". */
+  eyebrow?: string;
+  /** Display-font title at the top of the card. Empty = no title rendered. */
+  title?: string;
+  /** Font style for the title. */
+  titleFont?: TitleFontKind;
+  left?: SpiritAnimalSection;
+  right?: SpiritAnimalSection;
+  tagline?: string;
+  /** Optional small caption rendered under the tagline. */
+  caption?: string;
+}
+
+/** Soundtrack keepsake card: user-customizable title + the deck's track list. */
+export interface SoundtrackSlide extends SlideBase {
+  type: 'soundtrack';
+  /** Small-caps eyebrow at the top of the card. Default "your soundtrack". */
+  eyebrow?: string;
+  /** Optional display-font title rendered just below the eyebrow.
+   *  Empty string / undefined = no title rendered. */
+  title?: string;
+  /** Font style for the title. */
+  titleFont?: TitleFontKind;
+  /** Curated subset of soundtrack tracks. Each entry is a `name|artist` key
+   *  matching `getSoundtrack()`'s dedupe. Capped at 5. `undefined` = auto-pick. */
   featuredTrackKeys?: string[];
 }
 
@@ -207,7 +245,8 @@ export type Slide =
   | PodiumSlide
   | LetterSlide
   | MosaicSlide
-  | WrappedFinaleSlide
+  | SpiritAnimalSlide
+  | SoundtrackSlide
   | SignoffSlide;
 
 export interface Colleague {
@@ -215,17 +254,6 @@ export interface Colleague {
   name: string;
   passwordHash: string;
   slides: Slide[];
-  /** Curated by Michael per colleague — drives the wrapped-finale slide.
-   *  All three should be set together; missing data triggers a placeholder.
-   *  Media supports image (incl. animated GIF as base64) or video (URL,
-   *  same `public/videos/` pattern as mosaic/podium media). */
-  spiritAnimalMedia?: MediaItem;
-  spiritAnimalName?: string;
-  spiritAnimalTagline?: string;
-  /** Crop position within the circular slot, expressed as `object-position`
-   *  percentages on each axis (0–100). Default 50/50 = centered.
-   *  Resets to default whenever the media changes. */
-  spiritAnimalPosition?: { x: number; y: number };
 }
 
 export interface AppMeta {

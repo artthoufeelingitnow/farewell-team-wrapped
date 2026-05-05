@@ -120,15 +120,22 @@ export function Player() {
         onClose={closePlayer}
       />
 
-      {slide.songUrl && slide.songName && (
-        <div className="now-playing">
-          {slide.songArt && <img src={slide.songArt} alt="" />}
-          <div className="np-text">
-            <div className="np-title">{slide.songName}</div>
-            <div className="np-artist">{slide.songArtist || ''}</div>
+      {/* The keepsake slides have their own track list / spirit animal hero,
+          so the now-playing bubble would just clutter the captured PNG and the
+          live view. Audio still plays — that's wired to slide.songUrl in the
+          audio engine, independent of this UI. */}
+      {slide.songUrl &&
+        slide.songName &&
+        slide.type !== 'spirit-animal' &&
+        slide.type !== 'soundtrack' && (
+          <div className="now-playing">
+            {slide.songArt && <img src={slide.songArt} alt="" />}
+            <div className="np-text">
+              <div className="np-title">{slide.songName}</div>
+              <div className="np-artist">{slide.songArtist || ''}</div>
+            </div>
           </div>
-        </div>
-      )}
+        )}
 
     </div>
   );

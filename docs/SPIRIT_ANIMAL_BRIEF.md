@@ -1,5 +1,14 @@
 # Spirit Animal + Soundtrack Finale — Feature Brief
 
+> **Status (historical):** this brief is preserved as the original design
+> proposal. The shipped implementation has evolved beyond it — most notably,
+> the single keepsake card was split into two separate slide types
+> (`'spirit-animal'` with a two-column media layout, `'soundtrack'` with a
+> curated track list), the spirit animal data moved from `Colleague` onto
+> the slide itself, and a Display/Spotify font picker was added for the
+> title. Current implementation details live in [`../CLAUDE.md`](../CLAUDE.md)
+> under "Keepsake slides (current)".
+
 ## Goal
 
 Replace the current signoff slide with a finale that reveals the colleague's "spirit animal" (image + name + tagline curated by Michael) alongside the **soundtrack of their wrapped** — the list of songs that played across their slides, styled as a Spotify-style track list. The whole composition is downloadable as a PNG keepsake.

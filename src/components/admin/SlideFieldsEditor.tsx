@@ -1,3 +1,4 @@
+import { useRef, useState } from 'react';
 import type {
   Slide,
   PodiumSlide,
@@ -5,7 +6,10 @@ import type {
   PhotoSlide,
   MediaItem,
   PodiumItem,
-  WrappedFinaleSlide,
+  SpiritAnimalSlide,
+  SpiritAnimalSection,
+  SoundtrackSlide,
+  TitleFontKind,
   Colleague,
 } from '../../types';
 import { readFileAsDataURL, compressImage } from '../../utils';
@@ -58,8 +62,10 @@ export function SlideFieldsEditor({ slide, colleague, onPatch }: Props) {
       );
     case 'mosaic':
       return <MosaicFields slide={slide} onPatch={onPatch} />;
-    case 'wrapped-finale':
-      return <WrappedFinaleFields slide={slide} colleague={colleague} onPatch={onPatch} />;
+    case 'spirit-animal':
+      return <SpiritAnimalFields slide={slide} onPatch={onPatch} />;
+    case 'soundtrack':
+      return <SoundtrackFields slide={slide} colleague={colleague} onPatch={onPatch} />;
     case 'signoff':
       return (
         <div className="slide-fields">
@@ -389,20 +395,25 @@ function MosaicFields({ slide, onPatch }: { slide: MosaicSlide; onPatch: (patch:
   );
 }
 
-function WrappedFinaleFields({
+function SoundtrackFields({
   slide,
   colleague,
   onPatch,
 }: {
-  slide: WrappedFinaleSlide;
+  slide: SoundtrackSlide;
   colleague: Colleague;
   onPatch: (patch: Partial<Slide>) => void;
 }) {
   const allSongs = getSoundtrack(colleague);
+  const allKeys = new Set(allSongs.map((t) => t.key));
   // `undefined` means "auto-pick first 5". As soon as the user touches the
   // picker we materialize that auto pick into a concrete array so toggles read
   // intuitively (everything pre-selected, click to opt out).
-  const featured = slide.featuredTrackKeys ?? allSongs.slice(0, MAX_FEATURED_TRACKS).map((t) => t.key);
+  // Stored keys are also filtered against the current song list — orphaned
+  // keys (from songs that were renamed or removed elsewhere in the deck) get
+  // pruned so the "N/5" counter stays accurate.
+  const stored = slide.featuredTrackKeys?.filter((k) => allKeys.has(k));
+  const featured = stored ?? allSongs.slice(0, MAX_FEATURED_TRACKS).map((t) => t.key);
   const featuredSet = new Set(featured);
   const isAtCap = featured.length >= MAX_FEATURED_TRACKS;
 
@@ -421,9 +432,25 @@ function WrappedFinaleFields({
 
   return (
     <div className="slide-fields">
-      <div className="full" style={{ fontSize: 12, color: 'rgba(255,255,255,0.55)', lineHeight: 1.45 }}>
-        🎁 Spirit animal (image, name, tagline) is set at the top of this colleague's editor. Pick which songs to feature on the wrapped card below — capped at {MAX_FEATURED_TRACKS}, just like Spotify Wrapped.
-      </div>
+      <Field
+        label="Eyebrow (small caps)"
+        value={slide.eyebrow ?? ''}
+        placeholder="your soundtrack"
+        onChange={(v) => onPatch({ eyebrow: v })}
+        full
+      />
+      <Field
+        label="Title (optional, below eyebrow)"
+        value={slide.title ?? ''}
+        placeholder="vibes for [name]"
+        onChange={(v) => onPatch({ title: v })}
+        full
+      />
+
+      <TitleFontPicker
+        value={slide.titleFont}
+        onChange={(titleFont) => onPatch({ titleFont })}
+      />
 
       {allSongs.length === 0 ? (
         <div className="full" style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)', fontStyle: 'italic' }}>
@@ -478,6 +505,271 @@ function WrappedFinaleFields({
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+function SpiritAnimalFields({
+  slide,
+  onPatch,
+}: {
+  slide: SpiritAnimalSlide;
+  onPatch: (patch: Partial<Slide>) => void;
+}) {
+  const updateSection = (side: 'left' | 'right', patch: Partial<SpiritAnimalSection>) => {
+    const current = slide[side] ?? {};
+    const next: SpiritAnimalSection = { ...current, ...patch };
+    // Drop empty section if everything is cleared.
+    const hasAnyValue = !!(next.media || next.caption || next.mediaPosition);
+    onPatch({ [side]: hasAnyValue ? next : undefined } as Partial<SpiritAnimalSlide>);
+  };
+
+  return (
+    <div className="slide-fields">
+      <Field
+        label="Eyebrow (small caps)"
+        value={slide.eyebrow ?? ''}
+        placeholder="this is you if you were a cat..."
+        onChange={(v) => onPatch({ eyebrow: v })}
+        full
+      />
+      <Field
+        label="Title (optional)"
+        value={slide.title ?? ''}
+        placeholder="drowning cat of awareness & realisation"
+        onChange={(v) => onPatch({ title: v })}
+        full
+      />
+
+      <TitleFontPicker
+        value={slide.titleFont}
+        onChange={(titleFont) => onPatch({ titleFont })}
+      />
+
+      <div className="full">
+        <div className="spirit-fields-grid">
+          <SectionEditor
+            label="Left section"
+            section={slide.left}
+            onChange={(patch) => updateSection('left', patch)}
+          />
+          <SectionEditor
+            label="Right section"
+            section={slide.right}
+            onChange={(patch) => updateSection('right', patch)}
+          />
+        </div>
+      </div>
+
+      <Field
+        label="Tagline"
+        value={slide.tagline ?? ''}
+        placeholder="you realised you deserved better..."
+        onChange={(v) => onPatch({ tagline: v })}
+        type="textarea"
+        full
+      />
+      <Field
+        label="Caption (optional)"
+        value={slide.caption ?? ''}
+        placeholder="a small note below the tagline"
+        onChange={(v) => onPatch({ caption: v })}
+        full
+      />
+    </div>
+  );
+}
+
+function SectionEditor({
+  label,
+  section,
+  onChange,
+}: {
+  label: string;
+  section: SpiritAnimalSection | undefined;
+  onChange: (patch: Partial<SpiritAnimalSection>) => void;
+}) {
+  const FRAME_PX = 130;
+  const media = section?.media;
+  const pos = section?.mediaPosition ?? { x: 50, y: 50 };
+  const [dragging, setDragging] = useState(false);
+  const dragStartRef = useRef({ x: 0, y: 0, posX: 50, posY: 50 });
+
+  const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const dataUrl = await readFileAsDataURL(file);
+    // GIFs go through unchanged — running them through compressImage()'s
+    // canvas → JPEG pipeline strips the animation.
+    const src = file.type === 'image/gif' ? dataUrl : await compressImage(dataUrl, 700);
+    onChange({ media: { kind: 'image', src }, mediaPosition: undefined });
+    e.target.value = '';
+  };
+
+  const handleVideoUrl = () => {
+    const url = prompt(
+      'Paste video/GIF URL (e.g. https://artthoufeelingitnow.github.io/farewell-team-wrapped/videos/cat.mp4):',
+    );
+    if (!url) return;
+    const trimmed = url.trim();
+    if (!trimmed) return;
+    onChange({ media: { kind: 'video', src: trimmed }, mediaPosition: undefined });
+  };
+
+  const handlePointerDown = (e: React.PointerEvent<HTMLElement>) => {
+    if (!media) return;
+    e.currentTarget.setPointerCapture(e.pointerId);
+    dragStartRef.current = { x: e.clientX, y: e.clientY, posX: pos.x, posY: pos.y };
+    setDragging(true);
+  };
+  const handlePointerMove = (e: React.PointerEvent<HTMLElement>) => {
+    if (!dragging) return;
+    const dx = e.clientX - dragStartRef.current.x;
+    const dy = e.clientY - dragStartRef.current.y;
+    const x = Math.max(0, Math.min(100, dragStartRef.current.posX - (dx / FRAME_PX) * 100));
+    const y = Math.max(0, Math.min(100, dragStartRef.current.posY - (dy / FRAME_PX) * 100));
+    onChange({ mediaPosition: { x, y } });
+  };
+  const handlePointerUp = () => setDragging(false);
+
+  const objectPosition = `${pos.x}% ${pos.y}%`;
+  const dragStyle: React.CSSProperties = {
+    objectPosition,
+    cursor: dragging ? 'grabbing' : 'grab',
+    touchAction: 'none',
+  };
+
+  return (
+    <div className="spirit-section-editor">
+      <div className="field-label" style={{ marginBottom: 6 }}>{label}</div>
+      <div className="spirit-section-editor-frame">
+        {media ? (
+          media.kind === 'video' ? (
+            <video
+              src={media.src}
+              autoPlay
+              muted
+              loop
+              playsInline
+              draggable={false}
+              onPointerDown={handlePointerDown}
+              onPointerMove={handlePointerMove}
+              onPointerUp={handlePointerUp}
+              onPointerCancel={handlePointerUp}
+              style={dragStyle}
+            />
+          ) : (
+            <img
+              src={media.src}
+              alt=""
+              draggable={false}
+              onPointerDown={handlePointerDown}
+              onPointerMove={handlePointerMove}
+              onPointerUp={handlePointerUp}
+              onPointerCancel={handlePointerUp}
+              style={dragStyle}
+            />
+          )
+        ) : (
+          <div className="spirit-section-editor-empty">No media</div>
+        )}
+      </div>
+      {media && (
+        <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.45)', marginTop: 4, textAlign: 'center' }}>
+          Drag to reposition
+          {section?.mediaPosition && (
+            <button
+              type="button"
+              onClick={() => onChange({ mediaPosition: undefined })}
+              style={{
+                marginLeft: 6, background: 'none', border: 'none',
+                color: 'rgba(255,255,255,0.7)', cursor: 'pointer',
+                fontSize: 10, padding: 0, textDecoration: 'underline',
+              }}
+            >
+              ↺ center
+            </button>
+          )}
+        </div>
+      )}
+      <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
+        <label className="photo-upload" style={{ flex: 1, fontSize: 11, padding: '6px 8px' }}>
+          <input type="file" accept="image/*" onChange={handleUpload} style={{ display: 'none' }} />
+          📷 Image / GIF
+        </label>
+        <button
+          type="button"
+          className="photo-upload"
+          style={{ flex: 1, fontFamily: 'inherit', fontSize: 11, padding: '6px 8px' }}
+          onClick={handleVideoUrl}
+        >
+          🎥 Video URL
+        </button>
+      </div>
+      {media && (
+        <button
+          type="button"
+          className="btn btn-sm btn-ghost"
+          style={{ fontSize: 11, marginTop: 6, width: '100%' }}
+          onClick={() => onChange({ media: undefined, mediaPosition: undefined })}
+        >
+          Remove media
+        </button>
+      )}
+      <input
+        type="text"
+        className="field-input"
+        value={section?.caption ?? ''}
+        placeholder="Caption"
+        style={{ marginTop: 8, fontSize: 13 }}
+        onChange={(e) => onChange({ caption: e.target.value })}
+      />
+    </div>
+  );
+}
+
+/** Two-button picker for the keepsake title font. Used by both the soundtrack
+ *  and spirit-animal slide editors. `undefined` means "use default" (display). */
+function TitleFontPicker({
+  value,
+  onChange,
+}: {
+  value: TitleFontKind | undefined;
+  onChange: (v: TitleFontKind | undefined) => void;
+}) {
+  const isDisplay = (value ?? 'display') === 'display';
+  const isSpotify = value === 'spotify';
+  return (
+    <div className="full">
+      <label className="field-label">Title font</label>
+      <div className="title-font-picker">
+        <button
+          type="button"
+          className={`title-font-option${isDisplay ? ' is-active' : ''}`}
+          onClick={() => onChange(undefined)}
+        >
+          <span className="title-font-sample" style={{ fontFamily: "'Jua', sans-serif" }}>Aa</span>
+          <span className="title-font-label">Display</span>
+        </button>
+        <button
+          type="button"
+          className={`title-font-option${isSpotify ? ' is-active' : ''}`}
+          onClick={() => onChange('spotify')}
+        >
+          <span
+            className="title-font-sample"
+            style={{
+              fontFamily: "'Montserrat', sans-serif",
+              fontWeight: 900,
+              letterSpacing: '-0.02em',
+              textTransform: 'lowercase',
+            }}
+          >
+            aa
+          </span>
+          <span className="title-font-label">Spotify</span>
+        </button>
+      </div>
     </div>
   );
 }

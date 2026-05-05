@@ -54,10 +54,15 @@ function slugify(name: string): string {
 }
 
 /** Capture the card node as a PNG and trigger a download.
+ *  `kind` becomes the filename prefix (e.g. "spirit-animal", "soundtrack").
  *
  *  Fonts must be fully loaded before capture or the export silently falls back
  *  to system fonts (most likely thing to break — test on cold cache). */
-export async function saveWrappedAsPng(card: HTMLElement, colleagueName: string): Promise<void> {
+export async function saveCardAsPng(
+  card: HTMLElement,
+  colleagueName: string,
+  kind: string,
+): Promise<void> {
   if (document.fonts && document.fonts.ready) {
     await document.fonts.ready;
   }
@@ -71,7 +76,7 @@ export async function saveWrappedAsPng(card: HTMLElement, colleagueName: string)
     },
   });
   const link = document.createElement('a');
-  link.download = `wrapped-${slugify(colleagueName)}.png`;
+  link.download = `${slugify(kind)}-${slugify(colleagueName)}.png`;
   link.href = dataUrl;
   link.click();
 }

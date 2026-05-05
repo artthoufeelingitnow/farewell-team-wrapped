@@ -1,6 +1,9 @@
   :root {
     --font-display: 'Jua', 'Helvetica Neue', sans-serif;
     --font-body: 'Nunito', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+    /* Geometric bold sans for "Spotify Wrapped" styled titles. Montserrat 900
+       is closest to Circular without paying for the real thing. */
+    --font-spotify: 'Montserrat', 'Helvetica Neue', Helvetica, Arial, sans-serif;
   }
   * { margin: 0; padding: 0; box-sizing: border-box; }
   html, body { height: 100%; font-family: var(--font-body); -webkit-font-smoothing: antialiased; }
@@ -1261,7 +1264,7 @@
     /* z-index 0 — same level as .slide-bg but later in DOM so it paints
        above the bg. Keeps fragments BELOW any sibling content (whether at
        z-index 2 from the layering rule, or at z-index auto like the
-       wrapped-finale full-bleed wrapper which is excluded from that rule
+       keepsake full-bleed wrapper which is excluded from that rule
        — auto-z DOM-later siblings paint above z 0 by document order). */
     z-index: 0;
   }
@@ -1418,7 +1421,7 @@
      content z-index so its position: fixed isn't overridden.
      The photo-mosaic is also excluded so it doesn't form a stacking context that
      would trap its child imgs' z-index 7 below the player's nav-zones (z 4). */
-  .slide > *:not(.fragment-layer):not(.slide-bg):not(.photo-lightbox):not(.photo-mosaic):not(.quote-mark):not(.wrapped-finale) {
+  .slide > *:not(.fragment-layer):not(.slide-bg):not(.photo-lightbox):not(.photo-mosaic):not(.quote-mark):not(.keepsake) {
     position: relative;
     z-index: 2;
   }
@@ -1752,14 +1755,14 @@
   /* ============================================================
      WRAPPED FINALE — spirit animal + soundtrack keepsake card
      ============================================================ */
-  /* Full-bleed shell so the card centers within the slide and the save button
-     can sit below it without the slide's default content layering interfering.
-     The bottom padding reserves space for the absolutely-positioned action bar
-     — without it, on tall narrow phones the 9:16 card fills the available
-     height and pushes the Save button off-screen (where .slide's overflow:hidden
-     clips it). The actions live OUTSIDE the flex flow so they can never compete
-     with the card for vertical space. */
-  .wrapped-finale {
+  /* ============================================================
+     KEEPSAKE CARDS — shared frame for spirit-animal + soundtrack slides.
+     Both render a 9:16 portrait card centered in the slide with an absolute
+     "Save to gallery" button below. The card itself is what html-to-image
+     captures; the actions sit outside the captured node so they don't appear
+     in the exported PNG.
+     ============================================================ */
+  .keepsake {
     position: absolute;
     inset: 0;
     display: flex;
@@ -1768,13 +1771,7 @@
     justify-content: center;
     padding: 18px 16px 72px;
   }
-  /* The card itself — this node is what html-to-image captures. 9:16 portrait,
-     scales to fit viewport. Background is its own dark gradient, distinct from
-     the slide bg, so the keepsake reads as "the takeaway".
-     justify-content: space-between distributes the three child sections
-     (animal, soundtrack, footer) evenly through the height — without it, a
-     5-track deck would bunch at the top and leave a big empty bottom. */
-  .wrapped-finale-card {
+  .keepsake-card {
     /* position:relative + z-index pulls the card into the positioned-descendant
        paint layer of the player's stacking context. Without this, as a flex
        item with z-index: auto, it'd paint as an in-flow block at Layer 2 —
@@ -1797,137 +1794,92 @@
     align-items: center;
     text-align: center;
   }
-  /* Generic section wrapper so each chunk (animal, soundtrack) reads as a
-     single unit when distributed via space-between. */
-  .wrapped-finale-section {
+  /* Generic section wrapper so logical groups (eyebrow + title) read as one
+     unit when distributed via the card's space-between. */
+  .keepsake-section {
     display: flex;
     flex-direction: column;
     align-items: center;
     width: 100%;
   }
-  .wrapped-finale-animal {
-    width: 130px;
-    height: 130px;
-    border-radius: 50%;
-    overflow: hidden;
-    background: rgba(255, 255, 255, 0.04);
-    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.35), 0 0 0 1px rgba(255, 255, 255, 0.06);
-    flex-shrink: 0;
-    margin-bottom: 18px;
-  }
-  .wrapped-finale-animal-img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    display: block;
-  }
-  .wrapped-finale-animal-placeholder {
-    width: 100%;
-    height: 100%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 48px;
-    color: rgba(255, 255, 255, 0.35);
-    background: radial-gradient(circle at 50% 40%, rgba(255, 255, 255, 0.08), transparent 70%);
-  }
-  .wrapped-finale-eyebrow {
+  /* Eyebrow: small-caps, body font, low-key. Used by all keepsake cards. */
+  .keepsake-eyebrow {
     font-family: var(--font-body);
     font-weight: 700;
-    font-size: 10px;
+    font-size: 11px;
     letter-spacing: 2px;
     text-transform: uppercase;
-    color: rgba(255, 255, 255, 0.55);
-    margin: 0 0 10px;
-  }
-  .wrapped-finale-name {
-    font-family: var(--font-display);
-    font-size: clamp(24px, 6.5vw, 34px);
-    font-weight: 400;
-    color: #fff;
-    line-height: 1.1;
-    margin: 0 0 10px;
-  }
-  .wrapped-finale-tagline {
-    font-style: italic;
-    font-size: 13px;
-    color: rgba(255, 255, 255, 0.72);
-    line-height: 1.4;
-    max-width: 90%;
-    margin: 0;
-  }
-  .wrapped-finale-divider {
-    width: 56px;
-    height: 1px;
-    background: rgba(255, 255, 255, 0.2);
-    margin: 0 0 14px;
-  }
-  .wrapped-finale-tracks {
-    list-style: none;
-    margin: 0;
-    padding: 0;
-    width: 100%;
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-  }
-  .wrapped-finale-track {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    text-align: left;
-    min-width: 0;
-  }
-  .wrapped-finale-track-num {
-    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-    font-size: 10px;
-    color: rgba(255, 255, 255, 0.45);
-    width: 18px;
-    flex-shrink: 0;
-    font-variant-numeric: tabular-nums;
-  }
-  .wrapped-finale-track-art {
-    width: 38px;
-    height: 38px;
-    border-radius: 4px;
-    object-fit: cover;
-    flex-shrink: 0;
-    background: rgba(255, 255, 255, 0.05);
-  }
-  .wrapped-finale-track-art-empty {
-    background: linear-gradient(135deg, #2a2a2a 0%, #1a1a1a 100%);
-  }
-  .wrapped-finale-track-meta {
-    flex: 1;
-    min-width: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 1px;
-  }
-  .wrapped-finale-track-name {
-    font-size: 13px;
-    font-weight: 600;
-    color: #fff;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-  .wrapped-finale-track-artist {
-    font-size: 11px;
-    font-weight: 400;
     color: rgba(255, 255, 255, 0.6);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    margin: 0 0 10px;
+    line-height: 1.15;
   }
-  .wrapped-finale-footer {
+  /* Title: display font, big, white. Used by all keepsake cards. */
+  .keepsake-title {
+    font-family: var(--font-display);
+    font-weight: 400;
+    font-size: clamp(22px, 6vw, 30px);
+    line-height: 1.15;
+    color: #fff;
+    margin: 0;
+    max-width: 92%;
+    word-break: break-word;
+  }
+  /* Optional Spotify-Wrapped style for the title — bold geometric sans,
+     tight letter-spacing, lowercase. Pair with a per-slide font picker. */
+  .keepsake-title.font-spotify {
+    font-family: var(--font-spotify);
+    font-weight: 900;
+    font-size: clamp(26px, 7vw, 36px);
+    letter-spacing: -0.02em;
+    text-transform: lowercase;
+    line-height: 1.05;
+  }
+  /* Soundtrack uses space-evenly with the eyebrow / title / tracks / footer
+     all rendered as direct children (NOT wrapped in a `.keepsake-section`),
+     so the slack distributes into 5 equal gaps — top edge → eyebrow →
+     title → tracks → footer → bottom edge. Wrapping eyebrow+title in a
+     section makes the eyebrow→title gap controlled by margin (~10px) and
+     dwarfed by the space-evenly gaps elsewhere, which reads as imbalanced.
+     Symmetric top/bottom padding + zeroed eyebrow margin ensure the gaps
+     truly come from space-evenly alone. */
+  .keepsake-card-soundtrack {
+    justify-content: space-evenly;
+    padding: 30px 26px;
+  }
+  /* When the eyebrow is rendered as a direct child of the card (i.e. NOT
+     wrapped in a `.keepsake-section`), zero its margin so the gap to the
+     title comes purely from `space-evenly` and matches every other gap. */
+  .keepsake-card > .keepsake-eyebrow {
+    margin-bottom: 0;
+  }
+  .keepsake-tagline {
+    font-style: italic;
+    font-size: 14px;
+    color: rgba(255, 255, 255, 0.78);
+    line-height: 1.4;
+    max-width: 92%;
+    margin: 0 0 4px;
+  }
+  .keepsake-caption {
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.55);
+    line-height: 1.4;
+    max-width: 92%;
+    margin: 0;
+  }
+  .keepsake-footer {
+    /* No `margin-top: auto` here — the card uses `justify-content:
+       space-between`, and an auto top margin on the last child swallows all
+       the slack into a single gap (tracks bunched at top, footer at bottom).
+       Without it, the eyebrow/title group, the tracks, and the footer get
+       evenly distributed. */
     font-size: 11px;
     font-variant: small-caps;
     letter-spacing: 1.5px;
     color: rgba(255, 255, 255, 0.5);
     flex-shrink: 0;
   }
-  .wrapped-finale-actions {
+  .keepsake-actions {
     position: absolute;
     bottom: 18px;
     left: 0;
@@ -1937,7 +1889,7 @@
     justify-content: center;
     z-index: 5;
   }
-  .wrapped-finale-save {
+  .keepsake-save {
     background: rgba(255, 255, 255, 0.12);
     border: 1px solid rgba(255, 255, 255, 0.25);
     color: #fff;
@@ -1950,94 +1902,232 @@
     backdrop-filter: blur(6px);
     transition: background 0.15s ease, transform 0.12s ease;
   }
-  .wrapped-finale-save:hover:not(:disabled) {
+  .keepsake-save:hover:not(:disabled) {
     background: rgba(255, 255, 255, 0.2);
     transform: scale(1.03);
   }
-  .wrapped-finale-save:disabled {
+  .keepsake-save:disabled {
     opacity: 0.65;
     cursor: wait;
   }
 
-  /* ============================================================
-     ADMIN — spirit animal panel (top of colleague editor)
-     ============================================================ */
-  .spirit-animal-panel {
-    background: rgba(255, 255, 255, 0.03);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 10px;
-    padding: 14px;
-    margin: 12px 0;
+  /* SPIRIT ANIMAL — two-column layout. Card uses space-evenly so the slack
+     between eyebrow+title / images / tagline / caption / footer distributes
+     into equal gaps including the top and bottom edges. Drop the redundant
+     margin-bottom on .spirit-sections so flex distribution isn't skewed. */
+  .keepsake-card-spirit-animal {
+    justify-content: space-evenly;
+    padding: 30px 26px;
   }
-  .spirit-animal-header {
-    display: flex;
-    align-items: baseline;
-    gap: 10px;
-    flex-wrap: wrap;
-    font-size: 13px;
-    font-weight: 600;
-    color: rgba(255, 255, 255, 0.85);
-    margin-bottom: 12px;
-  }
-  .spirit-animal-hint {
-    font-size: 11px;
-    font-weight: 400;
-    color: rgba(255, 255, 255, 0.45);
-  }
-  .spirit-animal-grid {
+  .spirit-sections {
     display: grid;
-    grid-template-columns: 120px 1fr;
-    gap: 14px;
-    align-items: start;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    width: 100%;
   }
-  .spirit-animal-image {
+  .spirit-section {
     display: flex;
     flex-direction: column;
     align-items: center;
+    /* Uniform gap between name → media → caption inside the column. */
+    gap: 8px;
+    min-width: 0;
   }
-  .spirit-animal-image img,
-  .spirit-animal-image video {
-    width: 120px;
-    height: 120px;
+  .spirit-section-media {
+    width: 100%;
+    aspect-ratio: 1;
+    border-radius: 12px;
+    overflow: hidden;
+    background: rgba(255, 255, 255, 0.04);
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35), 0 0 0 1px rgba(255, 255, 255, 0.06);
+  }
+  .spirit-section-img {
+    width: 100%;
+    height: 100%;
     object-fit: cover;
-    border-radius: 50%;
-    background: #000;
     display: block;
-    /* Drag-to-reposition: prevent accidental text/image selection during drag,
-       and stop iOS from showing the long-press image-save sheet. */
     user-select: none;
     -webkit-user-select: none;
     -webkit-user-drag: none;
     -webkit-touch-callout: none;
   }
-  .spirit-animal-image-empty {
-    width: 120px;
-    height: 120px;
-    border-radius: 50%;
-    background: rgba(255, 255, 255, 0.04);
-    border: 1px dashed rgba(255, 255, 255, 0.15);
+  .spirit-section-empty {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 36px;
+    color: rgba(255, 255, 255, 0.25);
+    background: radial-gradient(circle at 50% 40%, rgba(255, 255, 255, 0.06), transparent 70%);
+  }
+  .spirit-section-caption {
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.6);
+    line-height: 1.35;
+    word-break: break-word;
+  }
+
+  /* SOUNDTRACK — track list (lifted from the old wrapped-finale styles) */
+  .keepsake-tracks {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .keepsake-tracks-empty {
+    font-size: 13px;
+    font-style: italic;
+    color: rgba(255, 255, 255, 0.45);
+    margin: 18px 0;
+  }
+  .keepsake-track {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    text-align: left;
+    min-width: 0;
+  }
+  .keepsake-track-num {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 10px;
+    color: rgba(255, 255, 255, 0.45);
+    width: 18px;
+    flex-shrink: 0;
+    font-variant-numeric: tabular-nums;
+  }
+  .keepsake-track-art {
+    width: 38px;
+    height: 38px;
+    border-radius: 4px;
+    object-fit: cover;
+    flex-shrink: 0;
+    background: rgba(255, 255, 255, 0.05);
+  }
+  .keepsake-track-art-empty {
+    background: linear-gradient(135deg, #2a2a2a 0%, #1a1a1a 100%);
+  }
+  .keepsake-track-meta {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+  }
+  .keepsake-track-name {
+    font-size: 13px;
+    font-weight: 600;
+    color: #fff;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .keepsake-track-artist {
+    font-size: 11px;
+    font-weight: 400;
+    color: rgba(255, 255, 255, 0.6);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* ============================================================
+     ADMIN — spirit animal slide field editor (two section editors)
+     ============================================================ */
+  .spirit-fields-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+  }
+  @media (max-width: 480px) {
+    .spirit-fields-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+  .spirit-section-editor {
+    display: flex;
+    flex-direction: column;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 8px;
+    padding: 10px;
+  }
+  .spirit-section-editor-frame {
+    width: 100%;
+    aspect-ratio: 1;
+    background: #000;
+    border-radius: 6px;
+    overflow: hidden;
+    position: relative;
+  }
+  .spirit-section-editor-frame img,
+  .spirit-section-editor-frame video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-user-drag: none;
+    -webkit-touch-callout: none;
+  }
+  .spirit-section-editor-empty {
+    width: 100%;
+    height: 100%;
     display: flex;
     align-items: center;
     justify-content: center;
     font-size: 11px;
     color: rgba(255, 255, 255, 0.4);
-  }
-  .spirit-animal-fields {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-  }
-  @media (max-width: 480px) {
-    .spirit-animal-grid {
-      grid-template-columns: 1fr;
-    }
-    .spirit-animal-image {
-      align-items: flex-start;
-    }
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px dashed rgba(255, 255, 255, 0.15);
   }
 
   /* ============================================================
-     ADMIN — wrapped-finale track picker (inside SlideFieldsEditor)
+     ADMIN — title font picker (soundtrack slide editor)
+     ============================================================ */
+  .title-font-picker {
+    display: flex;
+    gap: 8px;
+  }
+  .title-font-option {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 10px 14px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    color: rgba(255, 255, 255, 0.7);
+    cursor: pointer;
+    transition: background 0.12s ease, border-color 0.12s ease, color 0.12s ease;
+  }
+  .title-font-option:hover {
+    background: rgba(255, 255, 255, 0.08);
+    color: #fff;
+  }
+  .title-font-option.is-active {
+    background: rgba(255, 255, 255, 0.12);
+    border-color: rgba(255, 255, 255, 0.4);
+    color: #fff;
+  }
+  .title-font-sample {
+    font-size: 22px;
+    line-height: 1;
+    color: #fff;
+  }
+  .title-font-label {
+    font-size: 12px;
+    letter-spacing: 0.5px;
+  }
+
+  /* ============================================================
+     ADMIN — soundtrack track picker (inside SlideFieldsEditor)
      ============================================================ */
   .wrapped-track-picker {
     display: flex;

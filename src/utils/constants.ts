@@ -26,7 +26,8 @@ export const SLIDE_TYPES: Record<SlideType, SlideTypeMeta> = {
   podium: { label: 'Top 3', emoji: '🏆', bg: 'bg-yellow' },
   letter: { label: 'Letter', emoji: '💌', bg: 'bg-cream' },
   mosaic: { label: 'Photos', emoji: '🧩', bg: 'bg-teal' },
-  'wrapped-finale': { label: 'Wrapped', emoji: '🎁', bg: 'bg-dark' },
+  'spirit-animal': { label: 'Spirit animal', emoji: '🐾', bg: 'bg-dark' },
+  soundtrack: { label: 'Soundtrack', emoji: '🎵', bg: 'bg-dark' },
   signoff: { label: 'Sign off', emoji: '🫶', bg: 'bg-blue' },
 };
 

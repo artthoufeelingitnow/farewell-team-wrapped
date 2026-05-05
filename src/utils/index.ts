@@ -8,6 +8,9 @@ import type {
   FragmentConfig,
   FragmentType,
   SlideBg,
+  MediaItem,
+  SpiritAnimalSlide,
+  SoundtrackSlide,
 } from '../types';
 import {
   SLIDE_TYPES,
@@ -105,7 +108,9 @@ export function makeDefaultSlide(type: SlideType, name: string): Slide {
       return { type, bg, greeting: (name || 'Friend') + ',', body: '', signoff: '— Michael' };
     case 'mosaic':
       return { type, bg, eyebrow: 'Memories', title: '', sub: '', media: [] };
-    case 'wrapped-finale':
+    case 'spirit-animal':
+      return { type, bg };
+    case 'soundtrack':
       return { type, bg };
     case 'signoff':
       return { type, bg, eyebrow: 'Until next time', title: 'Thank you', sub: '' };
@@ -128,21 +133,20 @@ export function stripTransientFields(slide: Slide): Slide {
 }
 
 export function cleanColleagueForExport(c: Colleague): Colleague {
-  const out: Colleague = {
+  return {
     id: c.id,
     name: c.name,
     passwordHash: c.passwordHash,
     slides: (c.slides || []).map(stripTransientFields),
   };
-  if (c.spiritAnimalMedia) out.spiritAnimalMedia = c.spiritAnimalMedia;
-  if (c.spiritAnimalName) out.spiritAnimalName = c.spiritAnimalName;
-  if (c.spiritAnimalTagline) out.spiritAnimalTagline = c.spiritAnimalTagline;
-  if (c.spiritAnimalPosition) out.spiritAnimalPosition = c.spiritAnimalPosition;
-  return out;
 }
 
 export function getSlideDuration(slide: Slide | undefined): number {
-  if (slide?.type === 'wrapped-finale') return slide.songDuration ?? 30000;
+  // The keepsake slides need a longer default so the user has time to tap
+  // "Save" before auto-advance.
+  if (slide?.type === 'spirit-animal' || slide?.type === 'soundtrack') {
+    return slide.songDuration ?? 30000;
+  }
   return slide?.songDuration ?? DEFAULT_SLIDE_DURATION;
 }
 
@@ -208,7 +212,11 @@ function migrateFragments(fragments: unknown): FragmentConfig | undefined {
   return undefined;
 }
 
-export function migrateSlide(slide: unknown): Slide {
+/** Per-slide field migrations (bg, fragments, mosaic photos, photo photoData).
+ *  Does NOT change the slide's `type` field — type-level migrations (e.g.
+ *  splitting wrapped-finale into spirit-animal + soundtrack) live in
+ *  `migrateColleague` because they're one-to-many. */
+function migrateSlideFields(slide: unknown): Record<string, unknown> {
   const raw = slide as Record<string, unknown>;
   const migrated: Record<string, unknown> = {
     ...raw,
@@ -232,7 +240,7 @@ export function migrateSlide(slide: unknown): Slide {
 
   // Photo legacy: photoData: string → media: { kind: 'image', src }
   if (raw.type === 'photo') {
-    const existingMedia = (raw as Record<string, unknown>).media;
+    const existingMedia = raw.media;
     const legacyPhotoData = raw.photoData;
     if (!existingMedia && typeof legacyPhotoData === 'string' && legacyPhotoData) {
       migrated.media = { kind: 'image', src: legacyPhotoData };
@@ -240,16 +248,53 @@ export function migrateSlide(slide: unknown): Slide {
     delete migrated.photoData;
   }
 
-  // The 3D orb finale was replaced by the curated wrapped-finale. Convert in
-  // place so existing decks keep their slot + bg + fragments + song; the orb
-  // config is dropped (no useful translation).
-  if (raw.type === 'orb-finale') {
-    migrated.type = 'wrapped-finale';
+  // Drop the obsolete orb config blob — both orb-finale and wrapped-finale
+  // slides will get fully reshaped in migrateColleague.
+  if (raw.type === 'orb-finale' || raw.type === 'wrapped-finale') {
     delete migrated.orb;
   }
 
-  return migrated as unknown as Slide;
+  // Soundtrack slides used to have a single `title` field that rendered as the
+  // small-caps eyebrow. Promote it to `eyebrow` so the new `title` slot can be
+  // used for the optional display-font title below.
+  if (raw.type === 'soundtrack') {
+    if (typeof raw.title === 'string' && raw.eyebrow === undefined) {
+      migrated.eyebrow = raw.title;
+      delete migrated.title;
+    }
+  }
+
+  // Spirit-animal slides used to have a `name` field per section (rendered
+  // above the media). The schema dropped it — the slide-level `title` now
+  // carries the spirit-animal name. If the slide has no custom title yet,
+  // promote the first non-empty section name (left preferred) into title.
+  // Then strip `name` from each section regardless.
+  if (raw.type === 'spirit-animal') {
+    const left = raw.left as Record<string, unknown> | undefined;
+    const right = raw.right as Record<string, unknown> | undefined;
+    const promoted =
+      (typeof left?.name === 'string' && left.name) ||
+      (typeof right?.name === 'string' && right.name) ||
+      '';
+    if (promoted && (typeof migrated.title !== 'string' || !migrated.title)) {
+      migrated.title = promoted;
+    }
+    if (left && 'name' in left) {
+      const cleaned: Record<string, unknown> = { ...left };
+      delete cleaned.name;
+      migrated.left = cleaned;
+    }
+    if (right && 'name' in right) {
+      const cleaned: Record<string, unknown> = { ...right };
+      delete cleaned.name;
+      migrated.right = cleaned;
+    }
+  }
+
+  return migrated;
 }
+
+const SONG_FIELD_KEYS = ['songUrl', 'songName', 'songArtist', 'songArt', 'songStart', 'songDuration'];
 
 export function migrateAppData(data: AppData | undefined | null): AppData {
   const safe = (data ?? {}) as Partial<AppData>;
@@ -259,18 +304,79 @@ export function migrateAppData(data: AppData | undefined | null): AppData {
   };
 }
 
+/** Migrates one colleague + their slides. Handles two slide-type-level
+ *  migrations that produce more slides than they take in:
+ *  - `orb-finale` (legacy 3D orb)        → `[spirit-animal, soundtrack]`
+ *  - `wrapped-finale` (single keepsake)  → `[spirit-animal, soundtrack]`
+ *  Legacy colleague-level spirit animal fields (`spiritAnimalMedia/Name/...`)
+ *  are lifted onto the LEFT section of the FIRST migrated spirit-animal
+ *  slide for the colleague, then the colleague-level fields are stripped. */
 function migrateColleague(c: Colleague): Colleague {
   const raw = c as unknown as Record<string, unknown>;
-  const out: Colleague = {
-    ...c,
-    slides: (c.slides ?? []).map(migrateSlide),
-  };
-  // Legacy: spiritAnimalImage was a bare base64 string — promote to MediaItem
-  // so the field accepts video URLs alongside images.
-  const legacyImage = raw.spiritAnimalImage;
-  if (typeof legacyImage === 'string' && legacyImage && !out.spiritAnimalMedia) {
-    out.spiritAnimalMedia = { kind: 'image', src: legacyImage };
+
+  // Pull legacy colleague-level spirit animal data (any vintage of it).
+  let legacyMedia: MediaItem | undefined;
+  if (raw.spiritAnimalMedia && typeof raw.spiritAnimalMedia === 'object') {
+    legacyMedia = raw.spiritAnimalMedia as MediaItem;
+  } else if (typeof raw.spiritAnimalImage === 'string' && raw.spiritAnimalImage) {
+    legacyMedia = { kind: 'image', src: raw.spiritAnimalImage };
   }
-  delete (out as unknown as Record<string, unknown>).spiritAnimalImage;
-  return out;
+  const legacyName = typeof raw.spiritAnimalName === 'string' ? raw.spiritAnimalName : undefined;
+  const legacyTagline = typeof raw.spiritAnimalTagline === 'string' ? raw.spiritAnimalTagline : undefined;
+  const legacyPosition =
+    raw.spiritAnimalPosition && typeof raw.spiritAnimalPosition === 'object'
+      ? (raw.spiritAnimalPosition as { x: number; y: number })
+      : undefined;
+  let consumedLegacyAnimal = false;
+
+  const outSlides: Slide[] = [];
+  for (const s of c.slides ?? []) {
+    const m = migrateSlideFields(s);
+    const t = m.type as string;
+
+    if (t === 'orb-finale' || t === 'wrapped-finale') {
+      // First half: spirit-animal slide. Inherits bg + fragments + song
+      // fields from the source. Picks up legacy colleague-level spirit
+      // animal data on the LEFT section (first wrapped slide only).
+      const sa: SpiritAnimalSlide = {
+        type: 'spirit-animal',
+        bg: m.bg as BgConfig,
+      };
+      if (m.fragments) sa.fragments = m.fragments as FragmentConfig;
+      for (const k of SONG_FIELD_KEYS) {
+        if (m[k] !== undefined) (sa as unknown as Record<string, unknown>)[k] = m[k];
+      }
+      if (!consumedLegacyAnimal) {
+        const left: NonNullable<SpiritAnimalSlide['left']> = {};
+        if (legacyMedia) left.media = legacyMedia;
+        if (legacyPosition) left.mediaPosition = legacyPosition;
+        if (Object.keys(left).length > 0) sa.left = left;
+        // Legacy colleague-level spirit-animal name (e.g. "The Otter") now
+        // lives on the slide as the title, since per-section names are gone.
+        if (legacyName) sa.title = legacyName;
+        if (legacyTagline) sa.tagline = legacyTagline;
+        consumedLegacyAnimal = true;
+      }
+
+      // Second half: soundtrack slide. Just bg + featuredTrackKeys.
+      const sound: SoundtrackSlide = {
+        type: 'soundtrack',
+        bg: m.bg as BgConfig,
+      };
+      if (Array.isArray(m.featuredTrackKeys)) {
+        sound.featuredTrackKeys = m.featuredTrackKeys as string[];
+      }
+
+      outSlides.push(sa, sound);
+    } else {
+      outSlides.push(m as unknown as Slide);
+    }
+  }
+
+  return {
+    id: c.id,
+    name: c.name,
+    passwordHash: c.passwordHash,
+    slides: outSlides,
+  };
 }

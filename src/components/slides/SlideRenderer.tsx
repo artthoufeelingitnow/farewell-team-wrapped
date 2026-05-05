@@ -8,7 +8,8 @@ import { QuoteSlideView } from './QuoteSlideView';
 import { PodiumSlideView } from './PodiumSlideView';
 import { LetterSlideView } from './LetterSlideView';
 import { MosaicSlideView } from './MosaicSlideView';
-import { WrappedFinaleSlideView } from './WrappedFinaleSlideView';
+import { SpiritAnimalSlideView } from './SpiritAnimalSlideView';
+import { SoundtrackSlideView } from './SoundtrackSlideView';
 import { SignoffSlideView } from './SignoffSlideView';
 
 interface Props {
@@ -39,7 +40,8 @@ function SlideContent({ slide, colleague, onReplay, onClose }: Props) {
     case 'podium': return <PodiumSlideView slide={slide} />;
     case 'letter': return <LetterSlideView slide={slide} />;
     case 'mosaic': return <MosaicSlideView slide={slide} />;
-    case 'wrapped-finale': return <WrappedFinaleSlideView slide={slide} colleague={colleague} />;
+    case 'spirit-animal': return <SpiritAnimalSlideView slide={slide} colleague={colleague} />;
+    case 'soundtrack': return <SoundtrackSlideView slide={slide} colleague={colleague} />;
     case 'signoff': return <SignoffSlideView slide={slide} onReplay={onReplay} onClose={onClose} />;
   }
 }
