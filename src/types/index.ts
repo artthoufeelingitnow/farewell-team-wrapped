@@ -17,7 +17,7 @@ export type SlideType =
   | 'podium'
   | 'letter'
   | 'mosaic'
-  | 'orb-finale'
+  | 'wrapped-finale'
   | 'signoff';
 
 export interface PodiumItem {
@@ -186,43 +186,15 @@ export interface SignoffSlide extends SlideBase {
   sub?: string;
 }
 
-/** Curated set of orb "looks" the admin can pick from. Each preset bundles a
- *  base polyhedron + subdivision level + a noise-amplitude multiplier so a
- *  single dropdown choice gives a coherent aesthetic, while sliders below let
- *  you fine-tune within that preset. Leaving `geometry` undefined in OrbConfig
- *  means "use the seed-derived auto pick" (one of classic/gem/rose). */
-export type OrbGeometryPreset =
-  | 'classic'   // soft icosahedron — closest to a perfect sphere with light noise
-  | 'gem'       // octahedron — sharper N/S poles, gem-like
-  | 'rose'      // dodecahedron — pentagonal, rounded crystal
-  | 'diamond'   // low-detail octahedron with NO noise — sharp gemstone
-  | 'crystal'   // low-detail icosahedron with strong noise — chunky lobes
-  | 'smooth';   // high-detail icosahedron with very low noise — almost glassy
-
-/** Per-slide overrides for the finale orb. Every field is optional — undefined
- *  means "fall back to the seed-derived default". This lets each colleague's
- *  orb stay deterministic out of the box, while letting Michael hand-tune the
- *  visual for any colleague who needs something specific. */
-export interface OrbConfig {
-  geometry?: OrbGeometryPreset;
-  /** 0..0.20 — vertex displacement amount. 0 = perfectly geometric. */
-  noiseAmplitude?: number;
-  /** 0.5..3.0 — frequency of the displacement noise. Smaller = bigger lobes. */
-  noiseScale?: number;
-  /** -1..1 — vertical offset in 3D world units. Positive = orb sits higher. */
-  orbY?: number;
-  /** 2.5..7.0 — camera distance. Smaller = bigger orb in frame. */
-  cameraZ?: number;
-  /** 0..5000 — number of ambient particles around the orb. 0 disables. */
-  particleCount?: number;
-}
-
-/** 3D generative finale orb. The visual is derived from the colleague's name
- *  (deterministic seed) + their photos (palette), with optional admin overrides
- *  in `orb` for fine-tuning per colleague. */
-export interface OrbFinaleSlide extends SlideBase {
-  type: 'orb-finale';
-  orb?: OrbConfig;
+/** Curated finale slide. Reads from the colleague's `spiritAnimal*` fields and
+ *  derives the soundtrack list from the rest of their slides at render time. */
+export interface WrappedFinaleSlide extends SlideBase {
+  type: 'wrapped-finale';
+  /** Curated subset of soundtrack tracks to feature on the keepsake card.
+   *  Each entry is a `name|artist` key matching the dedupe key used by
+   *  `getSoundtrack()`. Capped at 5. When `undefined`, the view auto-picks
+   *  the first 5 songs from the deck (preserves zero-config behavior). */
+  featuredTrackKeys?: string[];
 }
 
 export type Slide =
@@ -233,7 +205,7 @@ export type Slide =
   | PodiumSlide
   | LetterSlide
   | MosaicSlide
-  | OrbFinaleSlide
+  | WrappedFinaleSlide
   | SignoffSlide;
 
 export interface Colleague {
@@ -241,6 +213,13 @@ export interface Colleague {
   name: string;
   passwordHash: string;
   slides: Slide[];
+  /** Curated by Michael per colleague — drives the wrapped-finale slide.
+   *  All three should be set together; missing data triggers a placeholder.
+   *  Media supports image (incl. animated GIF as base64) or video (URL,
+   *  same `public/videos/` pattern as mosaic/podium media). */
+  spiritAnimalMedia?: MediaItem;
+  spiritAnimalName?: string;
+  spiritAnimalTagline?: string;
 }
 
 export interface AppMeta {

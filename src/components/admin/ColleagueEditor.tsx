@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useAppStore } from '../../store/appStore';
 import { usePlayerStore } from '../../store/playerStore';
 import type { Colleague, Slide, SlideType } from '../../types';
-import { sha256, makeDefaultSlide } from '../../utils';
+import { sha256, makeDefaultSlide, readFileAsDataURL, compressImage } from '../../utils';
 import { showToast } from '../../store/toastStore';
 import { SlideEditor } from './SlideEditor';
 import { AddSlideMenu } from './AddSlideMenu';
@@ -75,6 +75,28 @@ export function ColleagueEditor({ colleague }: Props) {
     // The useEffect above handles scrolling once React has rendered the new slide.
   };
 
+  const handleAnimalUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const dataUrl = await readFileAsDataURL(file);
+    // GIFs go through unchanged — running them through compressImage()'s
+    // canvas → JPEG pipeline strips the animation. Other image types get
+    // compressed to 700px JPEG to keep the export blob small.
+    const src = file.type === 'image/gif' ? dataUrl : await compressImage(dataUrl, 700);
+    updateColleague(colleague.id, { spiritAnimalMedia: { kind: 'image', src } });
+    e.target.value = '';
+  };
+
+  const handleAnimalVideoUrl = () => {
+    const url = prompt(
+      'Paste video/GIF URL (e.g. https://artthoufeelingitnow.github.io/farewell-team-wrapped/videos/cat.mp4):',
+    );
+    if (!url) return;
+    const trimmed = url.trim();
+    if (!trimmed) return;
+    updateColleague(colleague.id, { spiritAnimalMedia: { kind: 'video', src: trimmed } });
+  };
+
   const handleDelete = () => {
     if (confirm(`Delete ${colleague.name || 'this colleague'}?`)) {
       deleteColleague(colleague.id);
@@ -106,6 +128,83 @@ export function ColleagueEditor({ colleague }: Props) {
               placeholder={colleague.passwordHash ? 'Leave blank to keep' : 'Set a password'}
               onChange={(e) => setPendingPassword(e.target.value)}
             />
+          </div>
+        </div>
+
+        <div className="spirit-animal-panel">
+          <div className="spirit-animal-header">
+            <span>🎁 Spirit animal</span>
+            <span className="spirit-animal-hint">Drives the wrapped finale slide.</span>
+          </div>
+          <div className="spirit-animal-grid">
+            <div className="spirit-animal-image">
+              {colleague.spiritAnimalMedia ? (
+                colleague.spiritAnimalMedia.kind === 'video' ? (
+                  <video
+                    src={colleague.spiritAnimalMedia.src}
+                    autoPlay
+                    muted
+                    loop
+                    playsInline
+                  />
+                ) : (
+                  <img src={colleague.spiritAnimalMedia.src} alt="" />
+                )
+              ) : (
+                <div className="spirit-animal-image-empty">No media</div>
+              )}
+              <div style={{ display: 'flex', gap: 6, marginTop: 8, width: '100%' }}>
+                <label className="photo-upload" style={{ flex: 1, fontSize: 12, padding: '8px 10px' }}>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleAnimalUpload}
+                    style={{ display: 'none' }}
+                  />
+                  📷 Image / GIF
+                </label>
+                <button
+                  type="button"
+                  className="photo-upload"
+                  style={{ flex: 1, fontFamily: 'inherit', fontSize: 12, padding: '8px 10px' }}
+                  onClick={handleAnimalVideoUrl}
+                >
+                  🎥 Video URL
+                </button>
+              </div>
+              {colleague.spiritAnimalMedia && (
+                <button
+                  type="button"
+                  className="btn btn-sm btn-ghost"
+                  style={{ marginTop: 6, fontSize: 11 }}
+                  onClick={() => updateColleague(colleague.id, { spiritAnimalMedia: undefined })}
+                >
+                  Remove
+                </button>
+              )}
+            </div>
+            <div className="spirit-animal-fields">
+              <div>
+                <label className="field-label">Animal name</label>
+                <input
+                  type="text"
+                  className="field-input"
+                  value={colleague.spiritAnimalName ?? ''}
+                  placeholder="The Otter"
+                  onChange={(e) => updateColleague(colleague.id, { spiritAnimalName: e.target.value })}
+                />
+              </div>
+              <div>
+                <label className="field-label">Tagline</label>
+                <input
+                  type="text"
+                  className="field-input"
+                  value={colleague.spiritAnimalTagline ?? ''}
+                  placeholder="playful, loyal, snack enthusiast"
+                  onChange={(e) => updateColleague(colleague.id, { spiritAnimalTagline: e.target.value })}
+                />
+              </div>
+            </div>
           </div>
         </div>
 

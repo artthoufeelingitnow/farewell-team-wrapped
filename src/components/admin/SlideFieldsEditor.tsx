@@ -5,18 +5,19 @@ import type {
   PhotoSlide,
   MediaItem,
   PodiumItem,
-  OrbFinaleSlide,
-  OrbConfig,
-  OrbGeometryPreset,
+  WrappedFinaleSlide,
+  Colleague,
 } from '../../types';
 import { readFileAsDataURL, compressImage } from '../../utils';
+import { getSoundtrack, MAX_FEATURED_TRACKS } from '../../utils/wrapped';
 
 interface Props {
   slide: Slide;
+  colleague: Colleague;
   onPatch: (patch: Partial<Slide>) => void;
 }
 
-export function SlideFieldsEditor({ slide, onPatch }: Props) {
+export function SlideFieldsEditor({ slide, colleague, onPatch }: Props) {
   switch (slide.type) {
     case 'intro':
       return (
@@ -57,8 +58,8 @@ export function SlideFieldsEditor({ slide, onPatch }: Props) {
       );
     case 'mosaic':
       return <MosaicFields slide={slide} onPatch={onPatch} />;
-    case 'orb-finale':
-      return <OrbFinaleFields slide={slide} onPatch={onPatch} />;
+    case 'wrapped-finale':
+      return <WrappedFinaleFields slide={slide} colleague={colleague} onPatch={onPatch} />;
     case 'signoff':
       return (
         <div className="slide-fields">
@@ -339,169 +340,95 @@ function MosaicFields({ slide, onPatch }: { slide: MosaicSlide; onPatch: (patch:
   );
 }
 
-const ORB_PRESET_OPTIONS: { value: OrbGeometryPreset; label: string }[] = [
-  { value: 'classic', label: '🔮 Classic — soft sphere' },
-  { value: 'gem', label: '💎 Gem — sharper poles' },
-  { value: 'rose', label: '🌸 Rose — pentagonal' },
-  { value: 'diamond', label: '💠 Diamond — sharp gemstone (no noise)' },
-  { value: 'crystal', label: '🪨 Crystal — chunky lobes' },
-  { value: 'smooth', label: '⚪ Smooth — almost glassy' },
-];
-
-function OrbFinaleFields({
+function WrappedFinaleFields({
   slide,
+  colleague,
   onPatch,
 }: {
-  slide: OrbFinaleSlide;
+  slide: WrappedFinaleSlide;
+  colleague: Colleague;
   onPatch: (patch: Partial<Slide>) => void;
 }) {
-  const orb = slide.orb ?? {};
-  const updateOrb = (patch: Partial<OrbConfig>) => {
-    const next = { ...orb, ...patch };
-    // Strip keys that are explicitly undefined so the stored object stays
-    // minimal — `undefined` means "use seed default" and shouldn't persist.
-    for (const k of Object.keys(next) as (keyof OrbConfig)[]) {
-      if (next[k] === undefined) delete next[k];
-    }
-    onPatch({ orb: Object.keys(next).length > 0 ? next : undefined });
+  const allSongs = getSoundtrack(colleague);
+  // `undefined` means "auto-pick first 5". As soon as the user touches the
+  // picker we materialize that auto pick into a concrete array so toggles read
+  // intuitively (everything pre-selected, click to opt out).
+  const featured = slide.featuredTrackKeys ?? allSongs.slice(0, MAX_FEATURED_TRACKS).map((t) => t.key);
+  const featuredSet = new Set(featured);
+  const isAtCap = featured.length >= MAX_FEATURED_TRACKS;
+
+  const toggle = (key: string) => {
+    const next = featuredSet.has(key)
+      ? featured.filter((k) => k !== key)
+      : isAtCap
+        ? featured
+        : [...featured, key];
+    onPatch({ featuredTrackKeys: next });
   };
+
+  const resetToAuto = () => onPatch({ featuredTrackKeys: undefined });
+
+  const isAuto = slide.featuredTrackKeys === undefined;
 
   return (
     <div className="slide-fields">
-      <div className="full" style={{ fontSize: 12, color: 'rgba(255,255,255,0.55)', lineHeight: 1.45, marginBottom: 4 }}>
-        🔮 The orb is auto-generated from this colleague's name + photos. Override any
-        of these to hand-tune their orb. Leave blank for the auto pick.
+      <div className="full" style={{ fontSize: 12, color: 'rgba(255,255,255,0.55)', lineHeight: 1.45 }}>
+        🎁 Spirit animal (image, name, tagline) is set at the top of this colleague's editor. Pick which songs to feature on the wrapped card below — capped at {MAX_FEATURED_TRACKS}, just like Spotify Wrapped.
       </div>
 
-      <div className="full">
-        <label className="field-label">Mesh shape</label>
-        <select
-          className="field-select"
-          value={orb.geometry ?? ''}
-          onChange={(e) => updateOrb({ geometry: (e.target.value || undefined) as OrbGeometryPreset | undefined })}
-        >
-          <option value="">Auto (from name)</option>
-          {ORB_PRESET_OPTIONS.map((p) => (
-            <option key={p.value} value={p.value}>{p.label}</option>
-          ))}
-        </select>
-      </div>
-
-      <OrbSlider
-        label="Lumpiness (noise amplitude)"
-        value={orb.noiseAmplitude}
-        min={0}
-        max={0.2}
-        step={0.005}
-        autoMid={0.07}
-        onChange={(v) => updateOrb({ noiseAmplitude: v })}
-        format={(v) => v.toFixed(3)}
-      />
-      <OrbSlider
-        label="Lobe size (noise scale)"
-        value={orb.noiseScale}
-        min={0.5}
-        max={3.0}
-        step={0.05}
-        autoMid={1.2}
-        onChange={(v) => updateOrb({ noiseScale: v })}
-        format={(v) => v.toFixed(2)}
-      />
-      <OrbSlider
-        label="Vertical offset"
-        value={orb.orbY}
-        min={-1}
-        max={1}
-        step={0.05}
-        autoMid={0.4}
-        onChange={(v) => updateOrb({ orbY: v })}
-        format={(v) => v.toFixed(2)}
-      />
-      <OrbSlider
-        label="Camera distance (orb size)"
-        value={orb.cameraZ}
-        min={2.5}
-        max={7}
-        step={0.1}
-        autoMid={4.5}
-        onChange={(v) => updateOrb({ cameraZ: v })}
-        format={(v) => v.toFixed(1)}
-      />
-      <OrbSlider
-        label="Particles"
-        value={orb.particleCount}
-        min={0}
-        max={5000}
-        step={100}
-        autoMid={2500}
-        onChange={(v) => updateOrb({ particleCount: v })}
-        format={(v) => `${Math.round(v)}`}
-      />
-    </div>
-  );
-}
-
-/** A range-slider field that supports an "auto" state (undefined). When auto,
- *  the slider visually parks at `autoMid` and shows "auto" instead of a number;
- *  moving it commits an override. The ↺ button clears the override. */
-function OrbSlider({
-  label,
-  value,
-  min,
-  max,
-  step,
-  autoMid,
-  onChange,
-  format,
-}: {
-  label: string;
-  value: number | undefined;
-  min: number;
-  max: number;
-  step: number;
-  autoMid: number;
-  onChange: (v: number | undefined) => void;
-  format: (v: number) => string;
-}) {
-  const isAuto = value === undefined;
-  const sliderValue = value ?? autoMid;
-  return (
-    <div className="full">
-      <label className="field-label" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <span>{label}</span>
-        <span style={{ fontSize: 11, color: isAuto ? 'rgba(255,255,255,0.4)' : '#fff', fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>
-          {isAuto ? 'auto' : format(sliderValue)}
-        </span>
-      </label>
-      <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-        <input
-          type="range"
-          min={min}
-          max={max}
-          step={step}
-          value={sliderValue}
-          onChange={(e) => onChange(parseFloat(e.target.value))}
-          style={{ flex: 1, opacity: isAuto ? 0.55 : 1 }}
-        />
-        <button
-          type="button"
-          onClick={() => onChange(undefined)}
-          disabled={isAuto}
-          title="Reset to auto"
-          style={{
-            background: 'rgba(255,255,255,0.08)',
-            border: '1px solid rgba(255,255,255,0.18)',
-            color: '#fff',
-            borderRadius: 6,
-            padding: '4px 8px',
-            fontSize: 12,
-            cursor: isAuto ? 'default' : 'pointer',
-            opacity: isAuto ? 0.4 : 1,
-          }}
-        >
-          ↺
-        </button>
-      </div>
+      {allSongs.length === 0 ? (
+        <div className="full" style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)', fontStyle: 'italic' }}>
+          No songs on any slides yet. Add a song to a slide and it'll appear here.
+        </div>
+      ) : (
+        <div className="full">
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+            <label className="field-label" style={{ margin: 0 }}>
+              Featured songs ({featured.length}/{MAX_FEATURED_TRACKS})
+              {isAuto && <span style={{ marginLeft: 8, fontSize: 10, opacity: 0.5, fontWeight: 400 }}>auto</span>}
+            </label>
+            {!isAuto && (
+              <button
+                type="button"
+                className="btn btn-sm btn-ghost"
+                style={{ fontSize: 11 }}
+                onClick={resetToAuto}
+                title="Auto-pick the first 5 songs in the deck"
+              >
+                ↺ Auto
+              </button>
+            )}
+          </div>
+          <div className="wrapped-track-picker">
+            {allSongs.map((t) => {
+              const checked = featuredSet.has(t.key);
+              const disabled = !checked && isAtCap;
+              return (
+                <label
+                  key={t.key}
+                  className={`wrapped-track-row${checked ? ' is-checked' : ''}${disabled ? ' is-disabled' : ''}`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    disabled={disabled}
+                    onChange={() => toggle(t.key)}
+                  />
+                  {t.art ? (
+                    <img src={t.art} alt="" className="wrapped-track-row-art" />
+                  ) : (
+                    <div className="wrapped-track-row-art wrapped-track-row-art-empty" />
+                  )}
+                  <div className="wrapped-track-row-meta">
+                    <div className="wrapped-track-row-name">{t.name}</div>
+                    {t.artist && <div className="wrapped-track-row-artist">{t.artist}</div>}
+                  </div>
+                </label>
+              );
+            })}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

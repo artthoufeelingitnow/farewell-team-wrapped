@@ -67,7 +67,7 @@ export function SlideEditor({ slide, colleague, index, isFirst, isLast, onPatch,
 
       <SlidePreview slide={slide} colleague={colleague} />
       <SlideStyleEditor slide={slide} onPatch={onPatch} />
-      <SlideFieldsEditor slide={slide} onPatch={onPatch} />
+      <SlideFieldsEditor slide={slide} colleague={colleague} onPatch={onPatch} />
       <SongPicker slide={slide} slideIndex={index} onPatch={onPatch} />
     </div>
   );

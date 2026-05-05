@@ -1240,7 +1240,12 @@
     inset: 0;
     overflow: hidden;
     pointer-events: none;
-    z-index: 1;
+    /* z-index 0 — same level as .slide-bg but later in DOM so it paints
+       above the bg. Keeps fragments BELOW any sibling content (whether at
+       z-index 2 from the layering rule, or at z-index auto like the
+       wrapped-finale full-bleed wrapper which is excluded from that rule
+       — auto-z DOM-later siblings paint above z 0 by document order). */
+    z-index: 0;
   }
   .fragment-layer .fragment {
     position: absolute;
@@ -1395,7 +1400,7 @@
      content z-index so its position: fixed isn't overridden.
      The photo-mosaic is also excluded so it doesn't form a stacking context that
      would trap its child imgs' z-index 7 below the player's nav-zones (z 4). */
-  .slide > *:not(.fragment-layer):not(.slide-bg):not(.photo-lightbox):not(.photo-mosaic):not(.quote-mark):not(.memory-orb) {
+  .slide > *:not(.fragment-layer):not(.slide-bg):not(.photo-lightbox):not(.photo-mosaic):not(.quote-mark):not(.wrapped-finale) {
     position: relative;
     z-index: 2;
   }
@@ -1727,108 +1732,345 @@
   .slide-preview-stage .end-actions { display: none; }
 
   /* ============================================================
-     ORB FINALE — 3D memory orb keepsake
+     WRAPPED FINALE — spirit animal + soundtrack keepsake card
      ============================================================ */
-  .memory-orb {
+  /* Full-bleed shell so the card centers within the slide and the save button
+     can sit below it without the slide's default content layering interfering. */
+  .wrapped-finale {
     position: absolute;
     inset: 0;
-  }
-  .memory-orb-stage {
-    /* Full-bleed canvas — the orb is at the 3D origin, so it stays visually
-       centered while the canvas spans the whole slide. */
-    position: absolute;
-    inset: 0;
-    animation: orbStageReveal 1.4s cubic-bezier(0.22, 1, 0.36, 1) both;
-  }
-  /* Force R3F's wrapper div + the canvas itself to fully fill the stage.
-     R3F's <Canvas> wraps the WebGL <canvas> in a relative-positioned div, and
-     under HMR the canvas's CSS dimensions can lag behind the parent's resize.
-     Explicit absolute fill + !important guarantees the canvas always covers
-     the slide so the world-origin orb projects to the visual center. */
-  .memory-orb-stage > div {
-    position: absolute !important;
-    inset: 0 !important;
-    width: 100% !important;
-    height: 100% !important;
-  }
-  .memory-orb-stage canvas {
-    display: block !important;
-    position: absolute !important;
-    top: 0 !important;
-    left: 0 !important;
-    width: 100% !important;
-    height: 100% !important;
-  }
-  /* Text overlay — pinned to the bottom of the slide, sits above the canvas.
-     z-index 5 puts it above the player's nav-zone overlays (z 4) so the
-     buttons are reliably clickable. Uses explicit flex centering rather than
-     text-align, since some Mac/Chrome combos render the title with subtle
-     horizontal drift when the underlying canvas is busy. */
-  .memory-orb-text {
-    position: absolute;
-    left: 0;
-    right: 0;
-    bottom: 48px;
-    padding: 0 28px;
     display: flex;
     flex-direction: column;
     align-items: center;
-    z-index: 5;
-    animation: orbTextReveal 0.9s cubic-bezier(0.22, 1, 0.36, 1) 0.7s both;
+    justify-content: center;
+    padding: 18px 16px 24px;
+    gap: 14px;
   }
-  @keyframes orbStageReveal {
-    from { opacity: 0; transform: scale(0.88); filter: blur(6px); }
-    to   { opacity: 1; transform: scale(1);    filter: blur(0); }
+  /* The card itself — this node is what html-to-image captures. 9:16 portrait,
+     scales to fit viewport. Background is its own dark gradient, distinct from
+     the slide bg, so the keepsake reads as "the takeaway".
+     justify-content: space-between distributes the three child sections
+     (animal, soundtrack, footer) evenly through the height — without it, a
+     5-track deck would bunch at the top and leave a big empty bottom. */
+  .wrapped-finale-card {
+    /* position:relative + z-index pulls the card into the positioned-descendant
+       paint layer of the player's stacking context. Without this, as a flex
+       item with z-index: auto, it'd paint as an in-flow block at Layer 2 —
+       *behind* the fragment layer (Layer 5). */
+    position: relative;
+    z-index: 2;
+    width: min(100%, 380px);
+    aspect-ratio: 9 / 16;
+    max-height: 100%;
+    background: linear-gradient(180deg, #1a1a1a 0%, #0a0a0a 100%);
+    border-radius: 18px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.45);
+    padding: 32px 26px 28px;
+    overflow: hidden;
+    color: #fff;
+    font-family: var(--font-body);
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    align-items: center;
+    text-align: center;
   }
-  @keyframes orbTextReveal {
-    from { opacity: 0; transform: translateY(12px); }
-    to   { opacity: 1; transform: translateY(0); }
+  /* Generic section wrapper so each chunk (animal, soundtrack) reads as a
+     single unit when distributed via space-between. */
+  .wrapped-finale-section {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 100%;
   }
-  .memory-orb-title {
+  .wrapped-finale-animal {
+    width: 130px;
+    height: 130px;
+    border-radius: 50%;
+    overflow: hidden;
+    background: rgba(255, 255, 255, 0.04);
+    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.35), 0 0 0 1px rgba(255, 255, 255, 0.06);
+    flex-shrink: 0;
+    margin-bottom: 18px;
+  }
+  .wrapped-finale-animal-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+  .wrapped-finale-animal-placeholder {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 48px;
+    color: rgba(255, 255, 255, 0.35);
+    background: radial-gradient(circle at 50% 40%, rgba(255, 255, 255, 0.08), transparent 70%);
+  }
+  .wrapped-finale-eyebrow {
+    font-family: var(--font-body);
+    font-weight: 700;
+    font-size: 10px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, 0.55);
+    margin: 0 0 10px;
+  }
+  .wrapped-finale-name {
     font-family: var(--font-display);
-    font-size: clamp(24px, 5vw, 44px);
+    font-size: clamp(24px, 6.5vw, 34px);
     font-weight: 400;
     color: #fff;
-    margin: 0 0 18px;
-    letter-spacing: 0.3px;
-    white-space: nowrap;
+    line-height: 1.1;
+    margin: 0 0 10px;
   }
-  .memory-orb-actions {
+  .wrapped-finale-tagline {
+    font-style: italic;
+    font-size: 13px;
+    color: rgba(255, 255, 255, 0.72);
+    line-height: 1.4;
+    max-width: 90%;
+    margin: 0;
+  }
+  .wrapped-finale-divider {
+    width: 56px;
+    height: 1px;
+    background: rgba(255, 255, 255, 0.2);
+    margin: 0 0 14px;
+  }
+  .wrapped-finale-tracks {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .wrapped-finale-track {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    text-align: left;
+    min-width: 0;
+  }
+  .wrapped-finale-track-num {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 10px;
+    color: rgba(255, 255, 255, 0.45);
+    width: 18px;
+    flex-shrink: 0;
+    font-variant-numeric: tabular-nums;
+  }
+  .wrapped-finale-track-art {
+    width: 38px;
+    height: 38px;
+    border-radius: 4px;
+    object-fit: cover;
+    flex-shrink: 0;
+    background: rgba(255, 255, 255, 0.05);
+  }
+  .wrapped-finale-track-art-empty {
+    background: linear-gradient(135deg, #2a2a2a 0%, #1a1a1a 100%);
+  }
+  .wrapped-finale-track-meta {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+  }
+  .wrapped-finale-track-name {
+    font-size: 13px;
+    font-weight: 600;
+    color: #fff;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .wrapped-finale-track-artist {
+    font-size: 11px;
+    font-weight: 400;
+    color: rgba(255, 255, 255, 0.6);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .wrapped-finale-footer {
+    font-size: 11px;
+    font-variant: small-caps;
+    letter-spacing: 1.5px;
+    color: rgba(255, 255, 255, 0.5);
+    flex-shrink: 0;
+  }
+  .wrapped-finale-actions {
     display: flex;
     gap: 12px;
     justify-content: center;
-    flex-wrap: wrap;
+    z-index: 5;
   }
-  .memory-orb-save {
+  .wrapped-finale-save {
     background: rgba(255, 255, 255, 0.12);
     border: 1px solid rgba(255, 255, 255, 0.25);
     color: #fff;
-    padding: 12px 26px;
+    padding: 11px 24px;
     border-radius: 999px;
     font-family: var(--font-body);
-    font-size: 15px;
+    font-size: 14px;
     font-weight: 700;
     cursor: pointer;
     backdrop-filter: blur(6px);
     transition: background 0.15s ease, transform 0.12s ease;
   }
-  .memory-orb-save:hover:not(:disabled) {
+  .wrapped-finale-save:hover:not(:disabled) {
     background: rgba(255, 255, 255, 0.2);
     transform: scale(1.03);
   }
-  .memory-orb-save:disabled {
-    opacity: 0.5;
+  .wrapped-finale-save:disabled {
+    opacity: 0.65;
     cursor: wait;
   }
-  /* Secondary action — same shape, lower contrast so the PNG button still reads
-     as the primary "share me" call-to-action. */
-  .memory-orb-save-secondary {
-    background: transparent;
-    border-color: rgba(255, 255, 255, 0.18);
-    color: rgba(255, 255, 255, 0.78);
-    font-weight: 600;
+
+  /* ============================================================
+     ADMIN — spirit animal panel (top of colleague editor)
+     ============================================================ */
+  .spirit-animal-panel {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 10px;
+    padding: 14px;
+    margin: 12px 0;
   }
-  .memory-orb-save-secondary:hover:not(:disabled) {
+  .spirit-animal-header {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    flex-wrap: wrap;
+    font-size: 13px;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.85);
+    margin-bottom: 12px;
+  }
+  .spirit-animal-hint {
+    font-size: 11px;
+    font-weight: 400;
+    color: rgba(255, 255, 255, 0.45);
+  }
+  .spirit-animal-grid {
+    display: grid;
+    grid-template-columns: 120px 1fr;
+    gap: 14px;
+    align-items: start;
+  }
+  .spirit-animal-image {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+  .spirit-animal-image img,
+  .spirit-animal-image video {
+    width: 120px;
+    height: 120px;
+    object-fit: cover;
+    border-radius: 50%;
+    background: #000;
+    display: block;
+  }
+  .spirit-animal-image-empty {
+    width: 120px;
+    height: 120px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px dashed rgba(255, 255, 255, 0.15);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.4);
+  }
+  .spirit-animal-fields {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  @media (max-width: 480px) {
+    .spirit-animal-grid {
+      grid-template-columns: 1fr;
+    }
+    .spirit-animal-image {
+      align-items: flex-start;
+    }
+  }
+
+  /* ============================================================
+     ADMIN — wrapped-finale track picker (inside SlideFieldsEditor)
+     ============================================================ */
+  .wrapped-track-picker {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    max-height: 320px;
+    overflow-y: auto;
+    padding-right: 4px;
+  }
+  .wrapped-track-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 8px;
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    cursor: pointer;
+    transition: background 0.12s ease, border-color 0.12s ease, opacity 0.12s ease;
+  }
+  .wrapped-track-row:hover:not(.is-disabled) {
+    background: rgba(255, 255, 255, 0.06);
+  }
+  .wrapped-track-row.is-checked {
     background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 255, 255, 0.18);
+  }
+  .wrapped-track-row.is-disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+  .wrapped-track-row input[type='checkbox'] {
+    flex-shrink: 0;
+    cursor: inherit;
+  }
+  .wrapped-track-row-art {
+    width: 36px;
+    height: 36px;
+    border-radius: 4px;
+    object-fit: cover;
+    flex-shrink: 0;
+    background: rgba(255, 255, 255, 0.05);
+  }
+  .wrapped-track-row-art-empty {
+    background: linear-gradient(135deg, #2a2a2a 0%, #1a1a1a 100%);
+  }
+  .wrapped-track-row-meta {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+  }
+  .wrapped-track-row-name {
+    font-size: 13px;
+    font-weight: 600;
     color: #fff;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .wrapped-track-row-artist {
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.55);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }

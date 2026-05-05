@@ -14,9 +14,8 @@ Originally built as a single self-contained HTML file (still preserved as `index
 
 - **Vite 6** + **React 19** + **TypeScript 5.6** (strict mode, discriminated unions)
 - **Zustand** for state (no Redux, no Context-only — small project, three discrete stores)
-- **three.js + @react-three/fiber + @react-three/drei** for the orb finale slide (Phase 1 added recently — bumped bundle 250 KB → 1.16 MB / gzip 77 → 324 KB)
-- **colorthief** v3 for palette extraction from photos (uses named exports `getPaletteSync` etc., NOT the old default-class API the docs sometimes show)
-- **Vanilla CSS** in one global stylesheet (`src/styles/global.css`). No CSS modules, no Tailwind. Class names like `.bg-pink`, `.slide-eyebrow`, `.podium-step`, `.memory-orb` are stable contracts; don't rename casually.
+- **html-to-image** for capturing the wrapped-finale card as a PNG keepsake (small dep; better web-font handling than html2canvas, important for Jua)
+- **Vanilla CSS** in one global stylesheet (`src/styles/global.css`). No CSS modules, no Tailwind. Class names like `.bg-pink`, `.slide-eyebrow`, `.podium-step`, `.wrapped-finale` are stable contracts; don't rename casually.
 
 ## Repo layout
 
@@ -24,7 +23,7 @@ Originally built as a single self-contained HTML file (still preserved as `index
 farewell_wrapped/
 ├── public/
 │   └── videos/             # hosted .mp4/.webm files for mosaic video media
-├── docs/                   # design briefs (MEMORY_ORB_BRIEF.md etc.)
+├── docs/                   # design briefs (MEMORY_ORB_BRIEF.md, SPIRIT_ANIMAL_BRIEF.md)
 ├── data.json.enc           # ENCRYPTED real content; data.json itself is gitignored
 ├── CLAUDE.md               # ← you are here. MUST stay at root for tools to load it.
 ├── src/
@@ -38,7 +37,6 @@ farewell_wrapped/
 │       ├── landing/{Landing, PasswordModal}.tsx
 │       ├── player/Player.tsx
 │       ├── slides/         # one view component per slide type + SlideRenderer + FragmentLayer + SlideBackground
-│       ├── orb/            # the 3D memory orb finale (Phase 1 — see "Active WIP" below)
 │       └── admin/          # Admin shell + Editor + SlidePreview + SlideStyleEditor + SlideFieldsEditor + SongPicker
 └── .github/workflows/deploy.yml
 ```
@@ -69,7 +67,10 @@ AppData = {
   meta: { title, subtitle, farewellNote },
   colleagues: [{
     id, name, passwordHash,  // SHA-256 of password
-    slides: Slide[]          // discriminated union, see src/types/index.ts
+    slides: Slide[],         // discriminated union, see src/types/index.ts
+    spiritAnimalMedia?,      // optional — MediaItem: { kind:'image', src:base64 } (incl. GIF) | { kind:'video', src:URL }
+    spiritAnimalName?,       // optional — e.g. "The Otter"
+    spiritAnimalTagline?,    // optional — e.g. "playful, loyal, snack enthusiast"
   }]
 }
 ```
@@ -93,7 +94,7 @@ Registered in `src/utils/constants.ts → SLIDE_TYPES`:
 | `podium` | Top-3 ranks. Each item has optional `media: MediaItem`. Visual order: 2nd, 1st, 3rd. Step heights 340/290/250 differ for hierarchy; media + name + count anchored to bottom; rank stuck to top. |
 | `letter` | Long-form heartfelt message (scrollable) |
 | `mosaic` | 3×3 grid of `media: MediaItem[]` (mixed images and videos). Tap a tile → swipe-down-to-dismiss lightbox. **`photos: string[]` is legacy — migration converts to `media`.** |
-| `orb-finale` | 3D generative finale orb (Phase 1 — see "Active WIP"). |
+| `wrapped-finale` | Curated keepsake card: spirit animal hero + auto-derived soundtrack list + PNG export. Slide carries no content — reads `spiritAnimal*` from `Colleague` and derives the soundtrack from this colleague's other slides. Default duration 30s (vs 7s) so the user can tap Save before auto-advance. |
 | `signoff` | Final card with replay/close buttons |
 
 `MediaItem = { kind: 'image', src } | { kind: 'video', src }`. Image `src` is base64 dataUrl; video `src` is a URL (typically `${BASE_URL}videos/foo.mp4`).
@@ -103,13 +104,13 @@ Each slide type has its own view component in `src/components/slides/` and gets 
 ### Backgrounds, fragments, audio
 
 - **Background**: discriminated `BgConfig`. Editor in `SlideStyleEditor.tsx` has three tabs (Preset / Custom / Lava). Preset tiles have a hover-revealed pencil that opens the native color picker → on pick, bg flips to `gradient` with that color as `from`. Lava blobs use `mix-blend-mode: screen` + per-blob `lava-drift-N` keyframes.
-- **Fragments**: `FragmentConfig = { source: {kind:'preset', type} | {kind:'image', dataUrls[]}, pattern, density }`. Six motion patterns (`fall`, `fall-slow`, `flip-fall`, `rise`, `twinkle`, `drift`). Disabled on `orb-finale` slides.
+- **Fragments**: `FragmentConfig = { source: {kind:'preset', type} | {kind:'image', dataUrls[]}, pattern, density }`. Six motion patterns (`fall`, `fall-slow`, `flip-fall`, `rise`, `twinkle`, `drift`). Enabled on every slide type. `.fragment-layer { z-index: 0 }` — same level as `.slide-bg` but DOM-later so fragments paint over the bg, and DOM-earlier than slide content so anything at `z-index: 2` (the layering rule) or `z-index: auto` (excluded full-bleed wrappers like `.wrapped-finale`) paints over fragments by document order. The wrapped-finale's PNG export only captures the inner card node, not the fragments around it — so fragments show in the live slide but the saved keepsake remains clean.
 - **Audio engine** (`src/hooks/audioEngine.ts`): iTunes Search API → 30s previews. Two `Audio` elements crossfade between slides with 600ms ramp (`FADE_MS`). Admin preview audio is separate (`previewSong`/`stopPreviewAudio`/`seekPreviewAudio`).
 
 ### Persistence + load order
 
 On boot:
-1. `appStore` initializes synchronously from **localStorage** (key `goodbye_wrapped_data_v1`). `migrateAppData()` runs on every load — coerces legacy shapes (string `bg`, `{kind:'preset'}` bg unchanged, mosaic `photos[]` → `media[]`, single fragment `dataUrl` → `dataUrls[]`).
+1. `appStore` initializes synchronously from **localStorage** (key `goodbye_wrapped_data_v1`). `migrateAppData()` runs on every load — coerces legacy shapes (string `bg`, `{kind:'preset'}` bg unchanged, mosaic `photos[]` → `media[]`, single fragment `dataUrl` → `dataUrls[]`, **`'orb-finale'` slides → `'wrapped-finale'`** with the orb config dropped).
 2. `useDataJsonLoader` async-fetches `${BASE_URL}data.json`. If it returns 200 with valid JSON, calls `loadFromExport()` which **replaces** the store data (and skips persistence — viewers shouldn't accumulate state).
 
 So in production, `data.json` always wins over a viewer's stale localStorage.
@@ -170,47 +171,51 @@ Videos are too big for base64 inlining, so they're hosted as static files alongs
 
 Production builds use `base: '/farewell-team-wrapped/'`. Dev stays at `/`. See `vite.config.ts`. Asset URLs and the `data.json` fetch use `import.meta.env.BASE_URL` so they resolve correctly.
 
-## Active WIP — Memory Orb finale
+## Wrapped Finale slide (current)
 
-A 3D generative orb is the planned finale, parameterized deterministically by colleague name + photo palette. Brief lives at `docs/MEMORY_ORB_BRIEF.md`.
+The `'wrapped-finale'` slide is a curated keepsake card placed before `signoff`. Brief: [`docs/SPIRIT_ANIMAL_BRIEF.md`](docs/SPIRIT_ANIMAL_BRIEF.md). It supersedes the earlier 3D memory orb (which was removed — see "Removed: Memory Orb" below).
 
-### Phase 1 — DONE (do not redo)
+### Pieces
 
-Files in `src/components/orb/`:
-- `useOrbSeed.ts` — `hashName(name) → 32-bit int` and derived values (norm, rotationStart, hueOffset)
-- `usePalette.ts` — collects images from photo/mosaic/podium slides → `getPaletteSync` from `colorthief` → harmonized hex palette. Falls back to brand-tinted preset endpoints when no photos exist.
-- `OrbScene.tsx` — `<Canvas>` with faceted `IcosahedronGeometry(1, 1)`, `MeshStandardMaterial` (flatShading, slight metalness, emissive tint), gentle Y-axis rotation, ambient + key + fill light, `gl={{ preserveDrawingBuffer: true }}` so PNG export works.
-- `saveOrbImage.ts` — composites the live orb canvas into a 1080×1080 share-card with title + caption, triggers PNG download.
-- `MemoryOrb.tsx` — wraps OrbScene with title/caption overlay + "Save my wrapped" button.
+- **Slide type:** `WrappedFinaleSlide` in `src/types/index.ts`. The slide carries no content fields — just the standard `bg`/`fragments`/song fields. Everything renders from the colleague's data.
+- **Per-colleague data:** three optional fields on `Colleague` — `spiritAnimalMedia` (MediaItem — image base64 incl. GIF, or video URL), `spiritAnimalName`, `spiritAnimalTagline`. Missing media or name triggers the generic placeholder (★ in a glow circle + "Yet to be discovered" name). GIFs are stored uncompressed (the `compressImage()` canvas → JPEG path strips animation, so the upload handler skips it for `image/gif` MIME). Videos follow the same `public/videos/`-hosted URL pattern as mosaic/podium.
+- **Soundtrack:** `getSoundtrack(colleague)` in `src/utils/wrapped.ts` walks `colleague.slides`, keeps any with `songUrl` + `songName`, and dedupes by `name|artist`. Capped at 8 in the rendered list with a "+ N more" hint when over.
+- **PNG export:** `saveWrappedAsPng(card, name)` in `src/utils/wrapped.ts` uses `html-to-image` `toPng` with `pixelRatio: 3`. Filename is `wrapped-{slug}.png`. Awaits `document.fonts.ready` first (without it, fonts silently fall back to system on cold cache).
+- **View:** `src/components/slides/WrappedFinaleSlideView.tsx`. Card node is the capture target via `cardRef`. Save button lives outside the card and is also tagged `data-html-to-image-ignore` (the `filter` callback in `saveWrappedAsPng` skips any element with that attr).
 
-Wiring:
-- `'orb-finale'` is in the `Slide` union, `SLIDE_TYPES` (🔮), and `makeDefaultSlide()`.
-- `SlideRenderer.tsx` dispatches to `OrbFinaleSlideView`.
-- Fragments are **suppressed** on orb-finale slides (clean 3D stage).
-- `.memory-orb` is in the `:not()` exclusion list of the slide-content layering rule so its `position: absolute; inset: 0` survives.
-- Admin field editor shows a "no editable fields" notice for orb-finale.
+### Wiring
 
-**Placement decision (Michael):** the orb-finale lives **before** the signoff slide (not replacing it). Admin manually places it.
+- `'wrapped-finale'` is in the `Slide` union, `SLIDE_TYPES` (🎁), and `makeDefaultSlide()`.
+- `SlideRenderer.tsx` dispatches to `WrappedFinaleSlideView`.
+- Fragments are **suppressed** on wrapped-finale slides so the keepsake card reads cleanly.
+- `.wrapped-finale` is in the `:not()` exclusion list of the slide-content layering rule so the full-bleed card shell can be `position: absolute; inset: 0`.
+- Admin: spirit animal fields edit at the **colleague level** (top of `ColleagueEditor.tsx`, `.spirit-animal-panel`). The slide's own field editor shows only a notice pointing to the colleague-level fields.
+- `getSlideDuration()` returns 30 s (vs 7 s default) for wrapped-finale so the user has time to tap Save before auto-advance.
+- `cleanColleagueForExport()` preserves `spiritAnimalImage`/`Name`/`Tagline` on export — add new colleague-level fields to that helper too or they'll vanish on export.
 
-### Phase 2 — PENDING (DO NOT START without Michael's signal)
+### Migration
 
-The brief explicitly says: ship Phase 1, get Michael's feedback, *then* talk about Phase 2. Phase 2 work to do:
-- Particle field around the orb (color-matched, 2000–5000 max)
-- Surface displacement using simplex noise → orb shape varies per person
-- Better lighting setup (3-point, environment map)
-- Smooth fade-in animation when slide loads
+`migrateSlide()` in `src/utils/index.ts` rewrites any legacy `'orb-finale'` slide to `'wrapped-finale'`, preserving the slot, bg, fragments, and song fields and dropping the `orb` config. Existing decks load + re-render with placeholder spirit animal data until Michael fills in the three fields per colleague.
 
-### Phase 3 — STRETCH
+`migrateColleague()` in the same file lifts legacy `spiritAnimalImage: string` (base64 dataUrl) → `spiritAnimalMedia: { kind: 'image', src }`. Old data round-trips cleanly into the new MediaItem-shaped field.
 
-- Per-colleague shape variation beyond color (different geometry types selected by hash)
-- Optional video export (MediaRecorder API → webm)
-- Sound on save success
+### Things to test before shipping
 
-### Open polish items for Phase 1 (small, can do anytime)
+- **Fonts on cold cache:** Open in a private window, jump to the wrapped-finale, hit Save. Verify Jua + Nunito render in the PNG. If they fall back, switch to embedding fonts via `html-to-image`'s `fontEmbedCSS` option.
+- **Save filename + sanitization:** colleague names with spaces/punctuation slugify cleanly.
+- **Buttons not in PNG:** `data-html-to-image-ignore` strips them via the `filter` callback.
+- **Layout @ 360px width:** narrowest realistic phone screen.
+- **0 / 1 / 8+ tracks:** card renders correctly in all three.
+- **Missing animal data:** placeholder appears, no broken image icon.
 
-- **Lazy-load three.js**: wrap `MemoryOrb` in `React.lazy()` so the 1 MB three.js bundle only loads when an orb-finale slide actually plays. Vite's chunk-size warning currently fires on build.
-- **Test cross-browser save**: Chrome/Safari/Firefox PNG download. `preserveDrawingBuffer: true` is set, but worth confirming on the live deploy.
-- **Test on phones / throttled CPU**: rotation should not stutter.
+## Removed: Memory Orb
+
+A 3D generative orb (three.js + @react-three/fiber + colorthief + simplex-noise) was previously the finale. It "didn't land" emotionally — abstract generative art without a name attached carried no weight. Replaced by the curated wrapped-finale (see above). All orb code, deps, and CSS were ripped out:
+- Removed deps: `three`, `@react-three/fiber`, `@react-three/drei`, `@types/three`, `colorthief`, `simplex-noise`. Bundle dropped ~900 KB.
+- Removed dirs/files: `src/components/orb/`, `src/components/slides/OrbFinaleSlideView.tsx`.
+- Removed types: `OrbFinaleSlide`, `OrbConfig`, `OrbGeometryPreset`.
+- Removed CSS: all `.memory-orb*` classes (was at the bottom of `global.css`).
+- The `'orb-finale'` slide type is gone from the union; the migration converts existing data so this is non-breaking for production decks.
 
 ## Gotchas
 
@@ -247,23 +252,20 @@ React 19 + StrictMode runs effects twice in dev. The audio engine's URL-match gu
 ### 11. The `:not()` content-layering rule
 `src/styles/global.css` has:
 ```css
-.slide > *:not(.fragment-layer):not(.slide-bg):not(.photo-lightbox):not(.photo-mosaic):not(.quote-mark):not(.memory-orb) {
+.slide > *:not(.fragment-layer):not(.slide-bg):not(.photo-lightbox):not(.photo-mosaic):not(.quote-mark):not(.wrapped-finale) {
   position: relative;
   z-index: 2;
 }
 ```
-This applies `position: relative; z-index: 2` to every direct child of `.slide`, *except* the listed exclusions. Anything that needs to be `position: absolute` (lightbox overlays, full-bleed children, the orb container) must be added to the exclusion list — otherwise its layout breaks silently. Specificity is (0,6,0), so a per-class override needs equal-or-higher specificity to win.
+This applies `position: relative; z-index: 2` to every direct child of `.slide`, *except* the listed exclusions. Anything that needs to be `position: absolute` (lightbox overlays, full-bleed children, the wrapped-finale shell) must be added to the exclusion list — otherwise its layout breaks silently. Specificity is (0,6,0), so a per-class override needs equal-or-higher specificity to win.
 
 ### 12. .mov files don't play reliably outside Safari
 iPhone-recorded `.mov` (HEVC/H.265) plays in Safari but breaks in Chrome/Firefox. Always re-encode to `.mp4` (H.264) with the ffmpeg one-liner above.
 
-### 13. Three.js bundle size
-Adding the orb pulled in three.js (~900 KB minified). Until lazy-loading is added, the whole bundle ships up front. Watch for slow phone loads.
+### 13. html-to-image + web fonts
+`html-to-image` will silently fall back to system fonts if the page's web fonts aren't fully loaded at capture time. `saveWrappedAsPng()` awaits `document.fonts.ready` first, but if a font is added after capture (rare), it can still miss. Test PNG export on a cold cache (private window) before shipping any change to the wrapped-finale's typography.
 
-### 14. colorthief v3 API
-The colorthief package on npm is now v3 with **named exports** (`getPalette`, `getPaletteSync`, `getColor`, etc.) returning Color objects with `.hex()`. The brief in `docs/` references the older default-class API — that's stale; do not import `ColorThief` as default.
-
-### 15. Mosaic edge-photo taps register as nav
+### 14. Mosaic edge-photo taps register as nav
 Player has 30%-wide `nav-zone` overlays at left/right (z-index 4). Mosaic photos sit at `z-index: 7` so taps land on the photo. Critical that `.photo-mosaic` does NOT form a stacking context (it's in the `:not()` exclusion list — keeps the inner `<img>`/`<video>` z-index propagating to the player's stacking context).
 
 ## Common tasks
@@ -278,9 +280,10 @@ Player has 30%-wide `nav-zone` overlays at left/right (z-index 4). Mosaic photos
 | Modify export | `handleExport()` in `src/components/admin/Admin.tsx` |
 | Touch the password flow | `src/components/landing/PasswordModal.tsx` + `sha256()` in `src/utils/index.ts` |
 | Change deploy / data flow | `.github/workflows/deploy.yml` + `useDataJsonLoader.ts` |
-| Tweak orb visuals | `src/components/orb/OrbScene.tsx` (geometry, materials, lights) |
-| Tweak orb palette | `src/components/orb/usePalette.ts` (harmonization, fallback) |
-| Adjust the export PNG | `src/components/orb/saveOrbImage.ts` |
+| Tweak wrapped-finale visuals | `src/components/slides/WrappedFinaleSlideView.tsx` + `.wrapped-finale-*` rules in `global.css` |
+| Tweak the soundtrack list | `getSoundtrack()` in `src/utils/wrapped.ts` (dedupe, ordering, cap) |
+| Tweak the PNG export | `saveWrappedAsPng()` in `src/utils/wrapped.ts` (pixelRatio, filter, filename) |
+| Edit a colleague's spirit animal | `.spirit-animal-panel` at the top of `ColleagueEditor.tsx` |
 
 ## Local dev
 
@@ -301,5 +304,6 @@ npm run decrypt-data # data.json.enc → data.json (sanity-check)
 - The single global CSS file — visual consistency depends on it
 - The discriminated unions for `Slide` / `BgConfig` / `FragmentSource` / `MediaItem` — type narrowing depends on the discriminator field
 - The `:not()` content-layering rule — adding new full-bleed components requires updating the exclusion list
-- **Phase boundaries on the memory orb** — Phase 1 is shipped, Phase 2 needs Michael's go-ahead per the brief
+- The orb-finale → wrapped-finale migration in `migrateSlide()` — removing it would orphan any legacy decks still carrying `'orb-finale'` slides
+- `cleanColleagueForExport()` must include any new colleague-level fields (e.g. `spiritAnimalImage`); otherwise they vanish on export
 - `CLAUDE.md` must stay at project root (Claude Code loads it from there). Other docs go in `docs/`.

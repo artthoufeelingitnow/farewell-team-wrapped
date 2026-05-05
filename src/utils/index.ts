@@ -105,7 +105,7 @@ export function makeDefaultSlide(type: SlideType, name: string): Slide {
       return { type, bg, greeting: (name || 'Friend') + ',', body: '', signoff: '— Michael' };
     case 'mosaic':
       return { type, bg, eyebrow: 'Memories', title: '', sub: '', media: [] };
-    case 'orb-finale':
+    case 'wrapped-finale':
       return { type, bg };
     case 'signoff':
       return { type, bg, eyebrow: 'Until next time', title: 'Thank you', sub: '' };
@@ -128,15 +128,20 @@ export function stripTransientFields(slide: Slide): Slide {
 }
 
 export function cleanColleagueForExport(c: Colleague): Colleague {
-  return {
+  const out: Colleague = {
     id: c.id,
     name: c.name,
     passwordHash: c.passwordHash,
     slides: (c.slides || []).map(stripTransientFields),
   };
+  if (c.spiritAnimalMedia) out.spiritAnimalMedia = c.spiritAnimalMedia;
+  if (c.spiritAnimalName) out.spiritAnimalName = c.spiritAnimalName;
+  if (c.spiritAnimalTagline) out.spiritAnimalTagline = c.spiritAnimalTagline;
+  return out;
 }
 
 export function getSlideDuration(slide: Slide | undefined): number {
+  if (slide?.type === 'wrapped-finale') return slide.songDuration ?? 30000;
   return slide?.songDuration ?? DEFAULT_SLIDE_DURATION;
 }
 
@@ -221,8 +226,15 @@ export function migrateSlide(slide: unknown): Slide {
         .filter((s) => typeof s === 'string')
         .map((src) => ({ kind: 'image', src }));
     }
-    // Drop the legacy field once migrated so the export stays clean.
     delete migrated.photos;
+  }
+
+  // The 3D orb finale was replaced by the curated wrapped-finale. Convert in
+  // place so existing decks keep their slot + bg + fragments + song; the orb
+  // config is dropped (no useful translation).
+  if (raw.type === 'orb-finale') {
+    migrated.type = 'wrapped-finale';
+    delete migrated.orb;
   }
 
   return migrated as unknown as Slide;
@@ -232,9 +244,22 @@ export function migrateAppData(data: AppData | undefined | null): AppData {
   const safe = (data ?? {}) as Partial<AppData>;
   return {
     meta: safe.meta ?? { title: 'For You', subtitle: '', farewellNote: '' },
-    colleagues: (safe.colleagues ?? []).map((c) => ({
-      ...c,
-      slides: (c.slides ?? []).map(migrateSlide),
-    })),
+    colleagues: (safe.colleagues ?? []).map((c) => migrateColleague(c)),
   };
+}
+
+function migrateColleague(c: Colleague): Colleague {
+  const raw = c as unknown as Record<string, unknown>;
+  const out: Colleague = {
+    ...c,
+    slides: (c.slides ?? []).map(migrateSlide),
+  };
+  // Legacy: spiritAnimalImage was a bare base64 string — promote to MediaItem
+  // so the field accepts video URLs alongside images.
+  const legacyImage = raw.spiritAnimalImage;
+  if (typeof legacyImage === 'string' && legacyImage && !out.spiritAnimalMedia) {
+    out.spiritAnimalMedia = { kind: 'image', src: legacyImage };
+  }
+  delete (out as unknown as Record<string, unknown>).spiritAnimalImage;
+  return out;
 }

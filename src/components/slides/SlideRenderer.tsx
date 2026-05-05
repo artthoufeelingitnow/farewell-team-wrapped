@@ -8,7 +8,7 @@ import { QuoteSlideView } from './QuoteSlideView';
 import { PodiumSlideView } from './PodiumSlideView';
 import { LetterSlideView } from './LetterSlideView';
 import { MosaicSlideView } from './MosaicSlideView';
-import { OrbFinaleSlideView } from './OrbFinaleSlideView';
+import { WrappedFinaleSlideView } from './WrappedFinaleSlideView';
 import { SignoffSlideView } from './SignoffSlideView';
 
 interface Props {
@@ -20,14 +20,11 @@ interface Props {
 
 export function SlideRenderer({ slide, colleague, onReplay, onClose }: Props) {
   const darkText = bgNeedsDarkText(slide.bg);
-  // Fragments are decorative 2D overlays. The orb-finale slide wants a clean
-  // 3D stage, so we deliberately suppress fragments there per the brief.
-  const showFragments = slide.type !== 'orb-finale';
 
   return (
     <div className={`slide slide-${slide.type}${darkText ? ' text-dark' : ''}`}>
       <SlideBackground config={slide.bg} />
-      {showFragments && <FragmentLayer config={slide.fragments} />}
+      <FragmentLayer config={slide.fragments} />
       <SlideContent slide={slide} colleague={colleague} onReplay={onReplay} onClose={onClose} />
     </div>
   );
@@ -42,7 +39,7 @@ function SlideContent({ slide, colleague, onReplay, onClose }: Props) {
     case 'podium': return <PodiumSlideView slide={slide} />;
     case 'letter': return <LetterSlideView slide={slide} />;
     case 'mosaic': return <MosaicSlideView slide={slide} />;
-    case 'orb-finale': return <OrbFinaleSlideView slide={slide} colleague={colleague} />;
+    case 'wrapped-finale': return <WrappedFinaleSlideView slide={slide} colleague={colleague} />;
     case 'signoff': return <SignoffSlideView slide={slide} onReplay={onReplay} onClose={onClose} />;
   }
 }
