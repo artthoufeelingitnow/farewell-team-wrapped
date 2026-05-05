@@ -149,7 +149,7 @@ export function ColleagueEditor({ colleague }: Props) {
 
   return (
     <>
-      <div className="editor-sticky-header">
+      <div className="editor-header">
         <div className="col-fields">
           <div>
             <label className="field-label">Name</label>
@@ -306,27 +306,12 @@ export function ColleagueEditor({ colleague }: Props) {
           </div>
         </div>
 
-        <div className="slides-section-header">
-          <h3>Slides ({slides.length})</h3>
-          <div style={{ display: 'flex', gap: '6px' }}>
-            <button
-              className="btn btn-sm btn-ghost"
-              disabled={slides.length === 0}
-              onClick={() => openPlayer(colleague.id, { preview: true })}
-            >
-              Preview
-            </button>
-            <button
-              className="btn btn-sm btn-ghost"
-              onClick={() => setShowAddSlide((s) => !s)}
-            >
-              + Add slide
-            </button>
-          </div>
-        </div>
       </div>
 
       <div className="slides-section">
+        <div className="slides-section-header">
+          <h3>Slides ({slides.length})</h3>
+        </div>
         {slides.map((s, i) => (
           <SlideEditor
             key={i}
@@ -342,6 +327,25 @@ export function ColleagueEditor({ colleague }: Props) {
         ))}
 
         {showAddSlide && <AddSlideMenu onPick={handleAddSlide} />}
+      </div>
+
+      {/* Sticky-at-bottom action bar — Preview + Add slide stay reachable
+          while editing the latest slide; settles at its natural position once
+          the user scrolls all the way down to the editor-actions row. */}
+      <div className="slide-actions-bar">
+        <button
+          className="btn btn-sm btn-ghost"
+          disabled={slides.length === 0}
+          onClick={() => openPlayer(colleague.id, { preview: true })}
+        >
+          Preview
+        </button>
+        <button
+          className="btn btn-sm btn-primary"
+          onClick={() => setShowAddSlide((s) => !s)}
+        >
+          + Add slide
+        </button>
       </div>
 
       <div className="editor-actions">
