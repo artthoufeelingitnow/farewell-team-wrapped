@@ -140,6 +140,8 @@ export interface PhotoSlide extends SlideBase {
   eyebrow?: string;
   caption?: string;
   sub?: string;
+  media?: MediaItem;
+  /** @deprecated Migrated to `media`. Kept on the type only so legacy data parses. */
   photoData?: string;
 }
 
@@ -220,6 +222,10 @@ export interface Colleague {
   spiritAnimalMedia?: MediaItem;
   spiritAnimalName?: string;
   spiritAnimalTagline?: string;
+  /** Crop position within the circular slot, expressed as `object-position`
+   *  percentages on each axis (0–100). Default 50/50 = centered.
+   *  Resets to default whenever the media changes. */
+  spiritAnimalPosition?: { x: number; y: number };
 }
 
 export interface AppMeta {

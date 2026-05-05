@@ -110,21 +110,70 @@ function PhotoFields({ slide, onPatch }: { slide: PhotoSlide; onPatch: (patch: P
     const file = e.target.files?.[0];
     if (!file) return;
     const dataUrl = await readFileAsDataURL(file);
-    const compressed = await compressImage(dataUrl, 900);
-    onPatch({ photoData: compressed });
+    // GIFs go through unchanged — running them through compressImage()'s
+    // canvas → JPEG pipeline strips the animation. Other image types get
+    // compressed to 900px JPEG to keep the export blob small.
+    const src = file.type === 'image/gif' ? dataUrl : await compressImage(dataUrl, 900);
+    onPatch({ media: { kind: 'image', src } });
+    e.target.value = '';
   };
+
+  const handleVideoUrl = () => {
+    const url = prompt(
+      'Paste video/GIF URL (e.g. https://artthoufeelingitnow.github.io/farewell-team-wrapped/videos/clip.mp4):',
+    );
+    if (!url) return;
+    const trimmed = url.trim();
+    if (!trimmed) return;
+    onPatch({ media: { kind: 'video', src: trimmed } });
+  };
+
+  const media = slide.media;
 
   return (
     <div className="slide-fields">
       <div className="full">
-        {slide.photoData && <img className="photo-thumb" src={slide.photoData} />}
-        <label className="photo-upload">
-          <input type="file" accept="image/*" onChange={handleUpload} style={{ display: 'none' }} />
-          {slide.photoData ? '🔁 Replace photo' : '📷 Upload photo'}
-        </label>
+        {media && (
+          <div style={{ position: 'relative', display: 'inline-block', marginBottom: 8 }}>
+            {media.kind === 'video' ? (
+              <video
+                className="photo-thumb"
+                src={media.src}
+                autoPlay
+                muted
+                loop
+                playsInline
+              />
+            ) : (
+              <img className="photo-thumb" src={media.src} />
+            )}
+            <button
+              className="icon-btn danger"
+              style={{ position: 'absolute', top: 4, right: 4, width: 22, height: 22, fontSize: 12 }}
+              onClick={() => onPatch({ media: undefined })}
+              title="Remove media"
+            >
+              ×
+            </button>
+          </div>
+        )}
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+          <label className="photo-upload" style={{ flex: 1 }}>
+            <input type="file" accept="image/*" onChange={handleUpload} style={{ display: 'none' }} />
+            {media?.kind === 'image' ? '🔁 Replace image / GIF' : '📷 Image / GIF'}
+          </label>
+          <button
+            type="button"
+            className="photo-upload"
+            style={{ flex: 1, fontFamily: 'inherit' }}
+            onClick={handleVideoUrl}
+          >
+            {media?.kind === 'video' ? '🔁 Change video URL' : '🎥 Video URL'}
+          </button>
+        </div>
       </div>
       <Field label="Eyebrow" value={slide.eyebrow ?? ''} placeholder="a moment in time" onChange={(v) => onPatch({ eyebrow: v })} />
-      <Field label="Caption (under photo)" value={slide.caption ?? ''} placeholder="that time when..." onChange={(v) => onPatch({ caption: v })} />
+      <Field label="Caption (under media)" value={slide.caption ?? ''} placeholder="that time when..." onChange={(v) => onPatch({ caption: v })} />
       <Field label="Subtitle below" value={slide.sub ?? ''} placeholder="Optional" onChange={(v) => onPatch({ sub: v })} />
     </div>
   );

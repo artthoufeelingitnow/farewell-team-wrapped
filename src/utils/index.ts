@@ -85,7 +85,7 @@ export function makeDefaultSlide(type: SlideType, name: string): Slide {
     case 'stat':
       return { type, bg, eyebrow: 'Together we...', bigNumber: '', label: '', sub: '' };
     case 'photo':
-      return { type, bg, eyebrow: 'A moment', caption: '', sub: '', photoData: '' };
+      return { type, bg, eyebrow: 'A moment', caption: '', sub: '' };
     case 'quote':
       return { type, bg, eyebrow: '', body: '', attrib: '' };
     case 'podium':
@@ -137,6 +137,7 @@ export function cleanColleagueForExport(c: Colleague): Colleague {
   if (c.spiritAnimalMedia) out.spiritAnimalMedia = c.spiritAnimalMedia;
   if (c.spiritAnimalName) out.spiritAnimalName = c.spiritAnimalName;
   if (c.spiritAnimalTagline) out.spiritAnimalTagline = c.spiritAnimalTagline;
+  if (c.spiritAnimalPosition) out.spiritAnimalPosition = c.spiritAnimalPosition;
   return out;
 }
 
@@ -227,6 +228,16 @@ export function migrateSlide(slide: unknown): Slide {
         .map((src) => ({ kind: 'image', src }));
     }
     delete migrated.photos;
+  }
+
+  // Photo legacy: photoData: string → media: { kind: 'image', src }
+  if (raw.type === 'photo') {
+    const existingMedia = (raw as Record<string, unknown>).media;
+    const legacyPhotoData = raw.photoData;
+    if (!existingMedia && typeof legacyPhotoData === 'string' && legacyPhotoData) {
+      migrated.media = { kind: 'image', src: legacyPhotoData };
+    }
+    delete migrated.photoData;
   }
 
   // The 3D orb finale was replaced by the curated wrapped-finale. Convert in

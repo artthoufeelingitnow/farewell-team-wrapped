@@ -597,7 +597,8 @@
     max-width: 320px;
     margin: 12px 0 22px;
   }
-  .photo-frame img {
+  .photo-frame img,
+  .photo-frame video {
     width: 100%;
     aspect-ratio: 1;
     object-fit: cover;
@@ -1977,6 +1978,12 @@
     border-radius: 50%;
     background: #000;
     display: block;
+    /* Drag-to-reposition: prevent accidental text/image selection during drag,
+       and stop iOS from showing the long-press image-save sheet. */
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-user-drag: none;
+    -webkit-touch-callout: none;
   }
   .spirit-animal-image-empty {
     width: 120px;

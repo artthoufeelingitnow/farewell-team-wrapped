@@ -23,6 +23,8 @@ export function WrappedFinaleSlideView({ slide, colleague }: Props) {
 
   const tracks = getFeaturedSoundtrack(colleague, slide.featuredTrackKeys);
   const hasAnimal = !!(colleague.spiritAnimalMedia && colleague.spiritAnimalName);
+  const animalPos = colleague.spiritAnimalPosition ?? { x: 50, y: 50 };
+  const animalObjectPosition = `${animalPos.x}% ${animalPos.y}%`;
 
   const handleSave = async () => {
     if (!cardRef.current || saveState === 'saving') return;
@@ -57,12 +59,14 @@ export function WrappedFinaleSlideView({ slide, colleague }: Props) {
                      hosted videos are same-origin in production but this keeps
                      it from tainting the export canvas if anything moves. */
                   crossOrigin="anonymous"
+                  style={{ objectPosition: animalObjectPosition }}
                 />
               ) : (
                 <img
                   className="wrapped-finale-animal-img"
                   src={colleague.spiritAnimalMedia.src}
                   alt={colleague.spiritAnimalName ?? 'Spirit animal'}
+                  style={{ objectPosition: animalObjectPosition }}
                 />
               )
             ) : (
