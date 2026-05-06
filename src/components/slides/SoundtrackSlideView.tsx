@@ -67,10 +67,6 @@ export function SoundtrackSlideView({ slide, colleague }: Props) {
         ) : (
           <div className="keepsake-tracks-empty">(this one was wordless)</div>
         )}
-
-        <div className="keepsake-footer">
-          made with care, for {colleague.name || 'you'}
-        </div>
       </div>
 
       <div className="keepsake-actions" data-html-to-image-ignore>

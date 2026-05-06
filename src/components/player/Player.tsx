@@ -21,6 +21,7 @@ export function Player() {
   const slideIndex = usePlayerStore((s) => s.slideIndex);
   const audioEnabled = usePlayerStore((s) => s.audioEnabled);
   const paused = usePlayerStore((s) => s.paused);
+  const previewingMedia = usePlayerStore((s) => s.previewingMedia);
   const setSlideIndex = usePlayerStore((s) => s.setSlideIndex);
   const nextSlideAction = usePlayerStore((s) => s.nextSlide);
   const prevSlideAction = usePlayerStore((s) => s.prevSlide);
@@ -58,10 +59,12 @@ export function Player() {
     elapsedRef.current = 0;
   }, [slideIndex, currentColleagueId]);
 
-  // Progress bar + auto-advance
+  // Progress bar + auto-advance. Halts on either flag — `paused` is hold-
+  // to-pause, `previewingMedia` is the mosaic lightbox. Audio behaves
+  // differently (only `paused` halts it); see useAudioEngine.
   useEffect(() => {
     if (!colleague || !slide) return;
-    if (paused) return;
+    if (paused || previewingMedia) return;
     if (isLast) {
       if (fillRef.current) fillRef.current.style.width = '100%';
       return;
@@ -81,13 +84,15 @@ export function Player() {
       }
     }, 50);
     return () => clearInterval(timer);
-  }, [slideIndex, slide, colleague, isLast, nextSlideAction, paused]);
+  }, [slideIndex, slide, colleague, isLast, nextSlideAction, paused, previewingMedia]);
 
-  // Keyboard shortcuts
+  // Keyboard shortcuts. Disabled while paused OR while a mosaic preview is
+  // open — the lightbox owns Escape (capture-phase listener inside it) and
+  // arrow keys would otherwise navigate the deck out from under the user.
   useEffect(() => {
     if (!colleague) return;
     const onKey = (e: KeyboardEvent) => {
-      if (paused) return;
+      if (paused || previewingMedia) return;
       if (e.key === 'ArrowRight' || e.key === ' ') {
         e.preventDefault();
         nextSlideAction(colleague.slides.length);
@@ -101,7 +106,7 @@ export function Player() {
     };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
-  }, [colleague, nextSlideAction, prevSlideAction, closePlayer, toggleAudio, paused]);
+  }, [colleague, nextSlideAction, prevSlideAction, closePlayer, toggleAudio, paused, previewingMedia]);
 
   // -------- Hold-to-pause (Instagram-style) --------
   // Pointer events on the player root. A press that lasts HOLD_PAUSE_MS without

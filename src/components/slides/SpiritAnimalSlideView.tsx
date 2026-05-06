@@ -57,10 +57,6 @@ export function SpiritAnimalSlideView({ slide, colleague }: Props) {
         {slide.caption && (
           <div className="keepsake-caption">{slide.caption}</div>
         )}
-
-        <div className="keepsake-footer">
-          made with care, for {colleague.name || 'you'}
-        </div>
       </div>
 
       <div className="keepsake-actions" data-html-to-image-ignore>

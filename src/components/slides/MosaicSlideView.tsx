@@ -8,17 +8,20 @@ const TAP_THRESHOLD_PX = 6;
 export function MosaicSlideView({ slide }: { slide: MosaicSlide }) {
   // Source of truth is `media`. Migration converts old `photos` to media on load.
   const media = (slide.media || []).filter((m) => m && m.src);
-  const setPaused = usePlayerStore((s) => s.setPaused);
+  const setPreviewingMedia = usePlayerStore((s) => s.setPreviewingMedia);
   const [expandedItem, setExpandedItem] = useState<MediaItem | null>(null);
   const [dragY, setDragY] = useState(0);
   const [dragging, setDragging] = useState(false);
   const startYRef = useRef(0);
 
-  // Pause auto-advance while a media item is expanded; ensure unpause on unmount.
+  // Halt auto-advance while a media item is expanded — but NOT audio. The
+  // soundtrack is the emotional underscore for the memory the user is
+  // lingering on; cutting it mid-bar to zoom on a photo breaks the moment.
+  // (Distinct from `paused`, which is hold-to-pause and stops both.)
   useEffect(() => {
-    setPaused(!!expandedItem);
-    return () => setPaused(false);
-  }, [expandedItem, setPaused]);
+    setPreviewingMedia(!!expandedItem);
+    return () => setPreviewingMedia(false);
+  }, [expandedItem, setPreviewingMedia]);
 
   // Escape closes the lightbox before bubbling to the player's Escape (close player).
   useEffect(() => {

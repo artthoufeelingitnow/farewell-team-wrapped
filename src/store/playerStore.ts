@@ -5,7 +5,13 @@ interface PlayerState {
   slideIndex: number;
   isPreviewMode: boolean;
   audioEnabled: boolean;
+  /** True while the user is actively pausing the deck (hold-to-pause).
+   *  Halts auto-advance AND pauses audio playback. */
   paused: boolean;
+  /** True while a mosaic photo is expanded in the lightbox. Halts auto-advance
+   *  but lets audio keep playing — the song is the emotional underscore for
+   *  the memory the user is lingering on. Distinct from `paused` on purpose. */
+  previewingMedia: boolean;
   unlockedColleagueIds: Set<string>;
 
   openPlayer: (colleagueId: string, opts?: { preview?: boolean }) => void;
@@ -15,6 +21,7 @@ interface PlayerState {
   setSlideIndex: (i: number) => void;
   toggleAudio: () => void;
   setPaused: (p: boolean) => void;
+  setPreviewingMedia: (p: boolean) => void;
   markUnlocked: (colleagueId: string) => void;
 }
 
@@ -24,6 +31,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   isPreviewMode: false,
   audioEnabled: true,
   paused: false,
+  previewingMedia: false,
   unlockedColleagueIds: new Set(),
 
   openPlayer: (colleagueId, opts) =>
@@ -32,10 +40,17 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
       slideIndex: 0,
       isPreviewMode: !!opts?.preview,
       paused: false,
+      previewingMedia: false,
     }),
 
   closePlayer: () =>
-    set({ currentColleagueId: null, slideIndex: 0, isPreviewMode: false, paused: false }),
+    set({
+      currentColleagueId: null,
+      slideIndex: 0,
+      isPreviewMode: false,
+      paused: false,
+      previewingMedia: false,
+    }),
 
   nextSlide: (totalSlides) => {
     const { slideIndex } = get();
@@ -52,6 +67,8 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   toggleAudio: () => set((s) => ({ audioEnabled: !s.audioEnabled })),
 
   setPaused: (paused) => set({ paused }),
+
+  setPreviewingMedia: (previewingMedia) => set({ previewingMedia }),
 
   markUnlocked: (colleagueId) =>
     set((s) => ({ unlockedColleagueIds: new Set([...s.unlockedColleagueIds, colleagueId]) })),
