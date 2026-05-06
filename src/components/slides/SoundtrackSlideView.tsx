@@ -67,6 +67,10 @@ export function SoundtrackSlideView({ slide, colleague }: Props) {
         ) : (
           <div className="keepsake-tracks-empty">(this one was wordless)</div>
         )}
+
+        {slide.tagline && (
+          <div className="keepsake-tagline">{slide.tagline}</div>
+        )}
       </div>
 
       <div className="keepsake-actions" data-html-to-image-ignore>

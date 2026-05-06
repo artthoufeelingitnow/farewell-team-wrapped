@@ -235,6 +235,8 @@ export interface SoundtrackSlide extends SlideBase {
   /** Curated subset of soundtrack tracks. Each entry is a `name|artist` key
    *  matching `getSoundtrack()`'s dedupe. Capped at 5. `undefined` = auto-pick. */
   featuredTrackKeys?: string[];
+  /** Optional italic tagline rendered at the bottom of the card. */
+  tagline?: string;
 }
 
 export type Slide =

@@ -452,6 +452,14 @@ function SoundtrackFields({
         onChange={(titleFont) => onPatch({ titleFont })}
       />
 
+      <Field
+        label="Tagline (italic, at bottom)"
+        value={slide.tagline ?? ''}
+        placeholder="e.g. on repeat all year"
+        onChange={(v) => onPatch({ tagline: v })}
+        full
+      />
+
       {allSongs.length === 0 ? (
         <div className="full" style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)', fontStyle: 'italic' }}>
           No songs on any slides yet. Add a song to a slide and it'll appear here.
