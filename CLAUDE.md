@@ -57,7 +57,7 @@ The player overlay takes priority over routing — if `playerStore.currentCollea
 
 Three Zustand stores in `src/store/`:
 - **`appStore`** — the persistent data (`meta` + `colleagues[]`). Every mutation calls `persist()` which writes to localStorage. Also exposes `loadFromExport(data)` for the runtime data.json fetch.
-- **`playerStore`** — transient runtime state: `currentColleagueId`, `slideIndex`, `audioEnabled`, `paused` (used by mosaic lightbox to halt auto-advance), `unlockedColleagueIds`, `isPreviewMode`. Not persisted.
+- **`playerStore`** — transient runtime state: `currentColleagueId`, `slideIndex`, `audioEnabled`, `paused` (hold-to-pause: halts auto-advance AND audio), `previewingMedia` (mosaic lightbox: halts auto-advance only — audio keeps playing as the emotional underscore), `unlockedColleagueIds`, `isPreviewMode`. Not persisted.
 - **`toastStore`** — single-toast notifications, used via `showToast(msg)`.
 
 ### Data model
@@ -91,8 +91,8 @@ Registered in `src/utils/constants.ts → SLIDE_TYPES`:
 | `podium` | Top-3 ranks. Each item has optional `media: MediaItem`. Visual order: 2nd, 1st, 3rd. Step heights 340/290/250 differ for hierarchy; media + name + count anchored to bottom; rank stuck to top. |
 | `letter` | Long-form heartfelt message (scrollable) |
 | `mosaic` | 3×3 grid of `media: MediaItem[]` (mixed images and videos). Tap a tile → swipe-down-to-dismiss lightbox. **`photos: string[]` is legacy — migration converts to `media`.** |
-| `spirit-animal` | Two-column keepsake card. Each section holds a `MediaItem` (image/GIF/video URL) with drag-to-position crop + optional caption. Slide-level: eyebrow (default "this is you if you were a cat..."), optional title (display font, with Display/Spotify font picker), tagline, optional bottom caption, footer "made with care, for [name]". PNG export. Default duration 30s. |
-| `soundtrack` | Soundtrack keepsake card. Eyebrow (default "your soundtrack") + optional title (display font, with Display/Spotify font picker) + auto-derived track list (max 5, curated via `featuredTrackKeys`) + footer. PNG export. Default duration 30s. |
+| `spirit-animal` | Two-column keepsake card. Each section holds a `MediaItem` (image/GIF/video URL) with drag-to-position crop + optional caption. Slide-level: eyebrow (default "this is you if you were a cat..."), optional title (display font, with Display/Spotify font picker), tagline, optional bottom caption. PNG export via Web Share API → camera roll on mobile, download elsewhere. Default duration 30s. |
+| `soundtrack` | Soundtrack keepsake card. Eyebrow (default "your soundtrack") + optional title (display font, with Display/Spotify font picker) + auto-derived track list (max 5, curated via `featuredTrackKeys`) + optional italic tagline at the bottom. PNG export via Web Share API. Default duration 30s. |
 | `signoff` | Final card with replay/close buttons |
 
 `MediaItem = { kind: 'image', src } | { kind: 'video', src }`. Image `src` is base64 dataUrl; video `src` is a URL (typically `${BASE_URL}videos/foo.mp4`).
@@ -103,7 +103,23 @@ Each slide type has its own view component in `src/components/slides/` and gets 
 
 - **Background**: discriminated `BgConfig`. Editor in `SlideStyleEditor.tsx` has three tabs (Preset / Custom / Lava). Preset tiles have a hover-revealed pencil that opens the native color picker → on pick, bg flips to `gradient` with that color as `from`. Lava blobs use `mix-blend-mode: screen` + per-blob `lava-drift-N` keyframes.
 - **Fragments**: `FragmentConfig = { source: {kind:'preset', type} | {kind:'image', dataUrls[]}, pattern, density }`. Six motion patterns (`fall`, `fall-slow`, `flip-fall`, `rise`, `twinkle`, `drift`). Enabled on every slide type. `.fragment-layer { z-index: 0 }` — same level as `.slide-bg` but DOM-later so fragments paint over the bg, and DOM-earlier than slide content so anything at `z-index: 2` (the layering rule) or `z-index: auto` (excluded full-bleed wrappers like `.keepsake`) paints over fragments by document order. The keepsake PNG export only captures the inner `.keepsake-card` node, not the fragments around it — so fragments show in the live slide but the saved keepsake remains clean.
-- **Audio engine** (`src/hooks/audioEngine.ts`): iTunes Search API → 30s previews. Two `Audio` elements crossfade between slides with 600ms ramp (`FADE_MS`). Admin preview audio is separate (`previewSong`/`stopPreviewAudio`/`seekPreviewAudio`).
+- **Audio engine** (`src/hooks/audioEngine.ts`): iTunes Search API → 30s previews. Two `Audio` elements crossfade between slides with 600ms ramp (`FADE_MS`). `pauseCurrent()` / `resumeCurrent()` halt and resume the current track without losing position (used by hold-to-pause). `onAutoplayBlocked(cb)` lets the player surface an unmute overlay if the first `play()` rejects with `NotAllowedError` (rare after the unlock click but real on iOS Low Power mode and some in-app browsers). Admin preview audio is separate (`previewSong`/`stopPreviewAudio`/`seekPreviewAudio`).
+
+### Player gestures + timing
+
+- **Hold-to-pause** (Instagram-style). Pointer-event handlers on `.player` start a 220ms timer (`HOLD_PAUSE_MS`); if the pointer hasn't moved more than 8px (`HOLD_MOVE_THRESHOLD_PX`) when it fires, `paused` flips true. Release flips it back. Move-threshold cancels the hold so swipes/scrolls (e.g. inside `.letter-wrap`) don't accidentally pause. The trailing `click` after a hold is suppressed via a ref so a hold never doubles as a nav-zone tap.
+- **Two pause causes, intentionally distinct:**
+  - `paused` (hold-to-pause) — halts the auto-advance timer AND pauses audio. Audio keeps its position so resume picks up mid-bar.
+  - `previewingMedia` (mosaic lightbox open) — halts auto-advance but lets audio keep playing. The song is the emotional underscore for the memory the user is lingering on; cutting it mid-bar to zoom on a photo broke the moment. `useAudioEngine` only watches `paused`; the player's auto-advance + keyboard nav watch `paused || previewingMedia`.
+- **Timer resume across pauses.** `elapsedRef` accumulates elapsed-ms inside the interval tick. On unpause, `startedAt = Date.now() - elapsedRef.current`, so the first post-resume tick reads back the prior elapsed value. A separate effect resets `elapsedRef` only when `slideIndex` / `currentColleagueId` changes — pause toggles preserve it.
+- **Autoplay-blocked overlay.** `#unmute-overlay` renders when `audioEngine.playSlide` first rejects with `NotAllowedError`. Single tap → `unblockAutoplay()` retries inside the user gesture. Mostly a fallback for iOS Low Power / corporate browsers; the unlock-click usually counts as activation.
+- **iOS gesture polish.** `.player` sets `-webkit-touch-callout: none` + `user-select: none` so a long press doesn't trigger native image-save / text-callout UI. `onContextMenu` is preventDefaulted on the player root.
+
+### Asset preloading
+
+- `src/utils/preload.ts` exposes `preloadColleagueAssets(colleague)` — iterates the deck's slides and creates an `Audio` (for every `songUrl`) + a hidden `<video>` (for every remote video `MediaItem.src`) with `preload="auto"`, retaining strong refs so GC doesn't abort the in-flight fetches. URLs are deduped across calls (one fetch per asset per session).
+- Wired in **two places**: `Landing.handleBubbleClick` (the moment the user shows intent — the password-entry seconds give the browser a head start) and `Player`'s mount effect (safety net for dev/preview flows that bypass Landing).
+- Base64-inlined images aren't preloaded (they're already in memory); only network-hosted videos benefit. No-op for assets without URLs.
 
 ### Persistence + load order
 
@@ -175,24 +191,25 @@ Two saveable keepsake slides sit before `signoff`: `'spirit-animal'` and `'sound
 
 ### Spirit-animal slide
 
-Two side-by-side sections (`left` + `right`), each with: a `MediaItem` (image/GIF/video URL) + optional `mediaPosition` (drag-to-position crop, `{ x, y }` 0-100% applied as `object-position`) + optional `caption`. Slide-level fields: `eyebrow` (small caps, default `"this is you if you were a cat..."`), `title` (display font, optional — empty = no title rendered), `titleFont` (Display = Jua / Spotify = Montserrat 900), `tagline` (italic, prominent), optional bottom `caption`. Footer `"made with care, for [name]"`.
+Two side-by-side sections (`left` + `right`), each with: a `MediaItem` (image/GIF/video URL) + optional `mediaPosition` (drag-to-position crop, `{ x, y }` 0-100% applied as `object-position`) + optional `caption`. Slide-level fields: `eyebrow` (small caps, default `"this is you if you were a cat..."`), `title` (display font, optional — empty = no title rendered), `titleFont` (Display = Jua / Spotify = Montserrat 900), `tagline` (italic, prominent), optional bottom `caption`. The "made with care, for [name]" footer was removed — felt redundant with the password-gated landing.
 
 - **Type:** `SpiritAnimalSlide` in `src/types/index.ts` (sections via `SpiritAnimalSection`). Per-section `name` field was removed — the slide-level `title` carries that role now.
-- **View:** [`src/components/slides/SpiritAnimalSlideView.tsx`](src/components/slides/SpiritAnimalSlideView.tsx). Eyebrow / title / images / tagline / footer all rendered as **direct children** of the card (no `.keepsake-section` wrapper) so `justify-content: space-evenly` produces uniform gaps top to bottom.
+- **View:** [`src/components/slides/SpiritAnimalSlideView.tsx`](src/components/slides/SpiritAnimalSlideView.tsx). Eyebrow / title / images / tagline / caption all rendered as **direct children** of the card (no `.keepsake-section` wrapper) so `justify-content: space-evenly` produces uniform gaps top to bottom.
 - **Field editor:** `SpiritAnimalFields` in `SlideFieldsEditor.tsx`. Eyebrow + title + `TitleFontPicker` at the top, then a 2-column grid of `SectionEditor` (each: media upload — image / GIF / video URL — drag-to-reposition crop on the preview, caption input), then tagline + optional bottom caption.
 
 ### Soundtrack slide
 
-Slide-level fields: `eyebrow` (small caps, default `"your soundtrack"`), `title` (display font, optional — e.g. a custom phrase), `titleFont` (Display / Spotify), `featuredTrackKeys?: string[]` (curated subset of the deck's songs, capped at 5; `undefined` = auto-pick first 5). Footer `"made with care, for [name]"`.
+Slide-level fields: `eyebrow` (small caps, default `"your soundtrack"`), `title` (display font, optional — e.g. a custom phrase), `titleFont` (Display / Spotify), `featuredTrackKeys?: string[]` (curated subset of the deck's songs, capped at 5; `undefined` = auto-pick first 5), optional `tagline` (italic, rendered at the bottom). No footer (matches spirit-animal).
 
 - **Type:** `SoundtrackSlide` in `src/types/index.ts`.
-- **View:** [`src/components/slides/SoundtrackSlideView.tsx`](src/components/slides/SoundtrackSlideView.tsx). Same flat structure as spirit-animal: eyebrow / title / tracks / footer rendered as **direct children** of the card. `justify-content: space-evenly` distributes 5 equal gaps (top edge + 3 between siblings + bottom edge).
-- **Field editor:** `SoundtrackFields` in `SlideFieldsEditor.tsx`. Eyebrow + title + `TitleFontPicker`, then the checkbox-based track picker (capped at 5, with "↺ Auto" reset). Stored `featuredTrackKeys` are filtered against the current song list before display so orphaned keys (from songs that were renamed/removed elsewhere) don't inflate the counter.
+- **View:** [`src/components/slides/SoundtrackSlideView.tsx`](src/components/slides/SoundtrackSlideView.tsx). Same flat structure as spirit-animal: eyebrow / title / tracks / tagline rendered as **direct children** of the card. `justify-content: space-evenly` distributes equal gaps; with 4 children that's 5 gaps (top edge + 3 between + bottom edge).
+- **Field editor:** `SoundtrackFields` in `SlideFieldsEditor.tsx`. Eyebrow + title + `TitleFontPicker`, then the tagline input, then the checkbox-based track picker (capped at 5, with "↺ Auto" reset). Stored `featuredTrackKeys` are filtered against the current song list before display so orphaned keys (from songs that were renamed/removed elsewhere) don't inflate the counter.
 
 ### Shared keepsake plumbing
 
-- **CSS:** `.keepsake` shell + `.keepsake-card` (the captured node) + universal `.keepsake-eyebrow` (small-caps body font) / `.keepsake-title` (display font) / `.keepsake-footer` / `.keepsake-actions` / `.keepsake-save`. The optional `.keepsake-title.font-spotify` modifier swaps to Montserrat 900 lowercase. Spirit-animal-specific styles: `.spirit-sections` / `.spirit-section-*`. Soundtrack-specific: `.keepsake-tracks` / `.keepsake-track-*`. Both cards use `justify-content: space-evenly` and symmetric `30px 26px` padding so the slack between children distributes into equal gaps; `.keepsake-card > .keepsake-eyebrow { margin-bottom: 0 }` zeroes the global eyebrow margin so the eyebrow→title gap matches every other gap.
-- **PNG export:** `saveCardAsPng(card, name, kind)` in `src/utils/wrapped.ts` uses `html-to-image` `toPng` with `pixelRatio: 3`. Filename `{kind}-{slug}.png` (`spirit-animal-eugenia.png`, `soundtrack-eugenia.png`). Awaits `document.fonts.ready` first (without it, fonts silently fall back to system on cold cache). Save button is `data-html-to-image-ignore` and the `filter` callback strips it from the captured DOM.
+- **CSS:** `.keepsake` shell + `.keepsake-card` (the captured node) + universal `.keepsake-eyebrow` (small-caps body font) / `.keepsake-title` (display font) / `.keepsake-tagline` / `.keepsake-caption` / `.keepsake-actions` / `.keepsake-save`. The optional `.keepsake-title.font-spotify` modifier swaps to Montserrat 900 lowercase. Spirit-animal-specific styles: `.spirit-sections` / `.spirit-section-*`. Soundtrack-specific: `.keepsake-tracks` / `.keepsake-track-*`. Both cards use `justify-content: space-evenly` and symmetric `30px 26px` padding so the slack between children distributes into equal gaps; `.keepsake-card > .keepsake-eyebrow { margin-bottom: 0 }` zeroes the global eyebrow margin so the eyebrow→title gap matches every other gap. The legacy `.keepsake-footer` rule still exists in CSS but no longer has any callers — leave alone or strip later.
+- **Save button:** opaque black pill with a 1.5px white halo border + drop shadow. Earlier semi-transparent white-on-white was invisible on the lighter cards; the solid-dark style reads on every card variant.
+- **PNG export → camera roll on mobile:** `saveCardAsPng(card, name, kind)` in `src/utils/wrapped.ts` captures via `html-to-image` `toPng` (`pixelRatio: 3`), then prefers `navigator.share({ files: [pngFile] })` so iOS / Android users get the OS share sheet → "Save to Photos" / "Save to Gallery" lands the file directly in the camera roll. Falls back to a download link on desktop or browsers without Web-Share-with-files (in-app browsers like Instagram/Slack/Gmail are the common offenders — open in real Safari/Chrome to get the share sheet). Filename `{kind}-{slug}.png`. Awaits `document.fonts.ready` first (without it, fonts silently fall back to system on cold cache). Save button is `data-html-to-image-ignore` and the `filter` callback strips it from the captured DOM.
 - **Fonts:** `--font-display` (Jua), `--font-body` (Nunito), `--font-spotify` (Montserrat 900). All three loaded via the Google Fonts link in `index.html`.
 - **`.keepsake`** is in the `:not()` exclusion list of the slide-content layering rule so the full-bleed shell can be `position: absolute; inset: 0`. The inner `.keepsake-card` has explicit `z-index: 2` to paint above the fragment layer (a flex item with `z-index: auto` would otherwise paint at Layer 2 of the player's stacking context, behind fragments).
 - **`getSlideDuration()`** returns 30 s (vs 7 s default) for both so the user has time to tap Save before auto-advance.
@@ -274,7 +291,13 @@ iPhone-recorded `.mov` (HEVC/H.265) plays in Safari but breaks in Chrome/Firefox
 `html-to-image` will silently fall back to system fonts if the page's web fonts aren't fully loaded at capture time. `saveCardAsPng()` awaits `document.fonts.ready` first, but if a font is added after capture (rare), it can still miss. Test PNG export on a cold cache (private window) before shipping any change to the keepsake slides' typography.
 
 ### 14. Mosaic edge-photo taps register as nav
-Player has 30%-wide `nav-zone` overlays at left/right (z-index 4). Mosaic photos sit at `z-index: 7` so taps land on the photo. Critical that `.photo-mosaic` does NOT form a stacking context (it's in the `:not()` exclusion list — keeps the inner `<img>`/`<video>` z-index propagating to the player's stacking context).
+Player has 30%-wide `nav-zone` overlays at left/right (z-index 4). Mosaic photos sit at `z-index: 7` so taps land on the photo. Critical that `.photo-mosaic` does NOT form a stacking context (it's in the `:not()` exclusion list — keeps the inner `<img>`/`<video>` z-index propagating to the player's stacking context). The `.letter-wrap` is in the same exclusion list at `z-index: 7` for the same reason — without it, only the middle 40% of a long letter is actually scrollable because the side nav-zones cover the rest.
+
+### 15. `navigator.share({ files })` only works in real browsers
+The keepsake save flow opens the OS share sheet (→ "Save to Photos" / "Save to Gallery") only when the browser supports Web Share with files. **In-app browsers** (Instagram, Facebook, Slack, Gmail link previews, etc.) usually return `false` from `navigator.canShare({ files })`, so the user falls through to the download path. There is no zero-tap "save to gallery" available on the open web — even when the share sheet works, the user still taps "Save Image" once. If a colleague reports the file going to Downloads instead of Photos, they're almost certainly opening the link inside an app, not Safari/Chrome.
+
+### 16. Hold-to-pause vs scroll containers
+The hold-to-pause pointer handlers live on `.player` and bubble-receive every touch. The `HOLD_MOVE_THRESHOLD_PX` of 8px cancels the timer once the user starts scrolling — that's why letter-wrap scrolling works without accidentally triggering pause. If you add a new scrollable region, make sure its `touch-action` permits the axis you want (`pan-y` for vertical) so the browser actually scrolls instead of fighting the pointer handler.
 
 ## Common tasks
 
@@ -294,6 +317,10 @@ Player has 30%-wide `nav-zone` overlays at left/right (z-index 4). Mosaic photos
 | Tweak the PNG export | `saveCardAsPng()` in `src/utils/wrapped.ts` (pixelRatio, filter, filename prefix) |
 | Add another title font | Add the family to `index.html` Google Fonts link → add a CSS variable + `.keepsake-title.font-X` rule in `global.css` → extend `TitleFontKind` in `types/index.ts` → add a button to `TitleFontPicker` in `SlideFieldsEditor.tsx` |
 | Edit spirit-animal data | The slide's own field editor (`SpiritAnimalFields`). Per-colleague spirit animal panel was removed — data now lives on the slide. |
+| Tweak hold-to-pause feel | `HOLD_PAUSE_MS` / `HOLD_MOVE_THRESHOLD_PX` at the top of `Player.tsx` |
+| Tweak audio pause/resume | `pauseCurrent()` / `resumeCurrent()` in `audioEngine.ts`; `useAudioEngine` watches `paused` only |
+| Add a new asset to preload | Extend `collectVideoUrls()` in `src/utils/preload.ts` for the new slide-type's media shape |
+| Touch the autoplay-blocked overlay | `#unmute-overlay` markup in `Player.tsx` + `audioEngine.onAutoplayBlocked` wiring + CSS in `global.css` |
 
 ## Local dev
 
@@ -316,4 +343,7 @@ npm run decrypt-data # data.json.enc → data.json (sanity-check)
 - The `:not()` content-layering rule — adding new full-bleed components requires updating the exclusion list
 - The legacy-finale → `[spirit-animal, soundtrack]` expansion in `migrateColleague()` — removing it would orphan any legacy decks still carrying `'orb-finale'` or `'wrapped-finale'` slides
 - `cleanColleagueForExport()` must include any new colleague-level fields; otherwise they vanish on export
+- The `paused` vs `previewingMedia` split in `playerStore` — collapsing them back together would re-introduce the regression where opening a mosaic photo cuts the song mid-bar. Hold-to-pause must keep killing audio; mosaic preview must not.
+- `useAudioEngine` watches `paused` only (not `previewingMedia`) — preserve that asymmetry.
+- Hold-to-pause's nav-zone click suppression — if you remove `suppressClickRef`, releasing a hold will navigate the deck.
 - `CLAUDE.md` must stay at project root (Claude Code loads it from there). Other docs go in `docs/`.
