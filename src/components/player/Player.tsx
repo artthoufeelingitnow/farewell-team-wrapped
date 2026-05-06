@@ -4,6 +4,16 @@ import { usePlayerStore } from '../../store/playerStore';
 import { useAudioEngine } from '../../hooks/useAudioEngine';
 import { SlideRenderer } from '../slides/SlideRenderer';
 import { getSlideDuration } from '../../utils';
+import { preloadColleagueAssets } from '../../utils/preload';
+
+/** How long the user must hold before auto-advance pauses. Short enough to
+ *  feel responsive (Instagram is ~150-200ms), long enough that a normal tap
+ *  on the nav-zone still navigates instead of pausing. */
+const HOLD_PAUSE_MS = 220;
+
+/** If the pointer travels more than this between down and the timer firing,
+ *  it's a swipe/scroll, not a hold — cancel the pause. */
+const HOLD_MOVE_THRESHOLD_PX = 8;
 
 export function Player() {
   const colleagues = useAppStore((s) => s.data.colleagues);
@@ -16,20 +26,37 @@ export function Player() {
   const prevSlideAction = usePlayerStore((s) => s.prevSlide);
   const closePlayer = usePlayerStore((s) => s.closePlayer);
   const toggleAudio = usePlayerStore((s) => s.toggleAudio);
+  const setPaused = usePlayerStore((s) => s.setPaused);
 
   const colleague = colleagues.find((c) => c.id === currentColleagueId);
   const slide = colleague?.slides[slideIndex];
   const nextSlide = colleague?.slides[slideIndex + 1];
 
-  useAudioEngine({
+  const { autoplayBlocked, unblockAutoplay } = useAudioEngine({
     active: !!colleague && !!slide,
     slide,
     nextSlide,
     audioEnabled,
+    paused,
   });
+
+  // Safety net: even if the user came in via a deep-link (e.g., dev preview)
+  // that skipped Landing, make sure we kick off asset preloading.
+  useEffect(() => {
+    preloadColleagueAssets(colleague);
+  }, [colleague]);
 
   const fillRef = useRef<HTMLDivElement>(null);
   const isLast = colleague ? slideIndex === colleague.slides.length - 1 : false;
+
+  // How much of the current slide's duration has already elapsed. Persisted
+  // across pause→resume cycles so unpausing resumes the timer mid-slide instead
+  // of restarting it. Reset to 0 only when the active slide actually changes.
+  const elapsedRef = useRef(0);
+
+  useEffect(() => {
+    elapsedRef.current = 0;
+  }, [slideIndex, currentColleagueId]);
 
   // Progress bar + auto-advance
   useEffect(() => {
@@ -40,9 +67,12 @@ export function Player() {
       return;
     }
     const duration = getSlideDuration(slide);
-    const start = Date.now();
+    // Anchor the start so `Date.now() - startedAt === elapsedRef.current` at
+    // tick zero — i.e. resume where the last interval left off.
+    const startedAt = Date.now() - elapsedRef.current;
     const timer = setInterval(() => {
-      const elapsed = Date.now() - start;
+      const elapsed = Date.now() - startedAt;
+      elapsedRef.current = elapsed;
       const pct = Math.min(100, (elapsed / duration) * 100);
       if (fillRef.current) fillRef.current.style.width = `${pct}%`;
       if (elapsed >= duration) {
@@ -73,6 +103,59 @@ export function Player() {
     return () => document.removeEventListener('keydown', onKey);
   }, [colleague, nextSlideAction, prevSlideAction, closePlayer, toggleAudio, paused]);
 
+  // -------- Hold-to-pause (Instagram-style) --------
+  // Pointer events on the player root. A press that lasts HOLD_PAUSE_MS without
+  // moving > HOLD_MOVE_THRESHOLD_PX flips paused=true. On release we flip back
+  // and suppress the trailing click so nav-zones don't navigate.
+  const holdTimerRef = useRef<number | null>(null);
+  const wasHoldRef = useRef(false);
+  const downPosRef = useRef<{ x: number; y: number } | null>(null);
+  const suppressClickRef = useRef(false);
+
+  const cancelHoldTimer = () => {
+    if (holdTimerRef.current !== null) {
+      clearTimeout(holdTimerRef.current);
+      holdTimerRef.current = null;
+    }
+  };
+
+  const onPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    // Only primary button / touch / pen.
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    wasHoldRef.current = false;
+    downPosRef.current = { x: e.clientX, y: e.clientY };
+    cancelHoldTimer();
+    holdTimerRef.current = window.setTimeout(() => {
+      wasHoldRef.current = true;
+      setPaused(true);
+    }, HOLD_PAUSE_MS);
+  };
+
+  const onPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!downPosRef.current || wasHoldRef.current) return;
+    const dx = e.clientX - downPosRef.current.x;
+    const dy = e.clientY - downPosRef.current.y;
+    if (Math.hypot(dx, dy) > HOLD_MOVE_THRESHOLD_PX) {
+      // Movement = scroll/swipe, not hold. Cancel pending pause.
+      cancelHoldTimer();
+    }
+  };
+
+  const finishPointer = () => {
+    cancelHoldTimer();
+    downPosRef.current = null;
+    if (wasHoldRef.current) {
+      setPaused(false);
+      // The click that follows pointerup should not navigate. Reset on the
+      // next tick once the click handler has had a chance to read the flag.
+      suppressClickRef.current = true;
+      setTimeout(() => {
+        suppressClickRef.current = false;
+        wasHoldRef.current = false;
+      }, 0);
+    }
+  };
+
   if (!colleague || !slide) {
     // Either nothing to play or colleague disappeared — close.
     if (currentColleagueId) closePlayer();
@@ -80,7 +163,14 @@ export function Player() {
   }
 
   return (
-    <div className="player">
+    <div
+      className={`player${paused ? ' player-paused' : ''}`}
+      onPointerDown={onPointerDown}
+      onPointerMove={onPointerMove}
+      onPointerUp={finishPointer}
+      onPointerCancel={finishPointer}
+      onContextMenu={(e) => e.preventDefault()}
+    >
       <div className="progress-bar">
         {colleague.slides.map((_, i) => (
           <div key={i} className="progress-segment">
@@ -103,13 +193,15 @@ export function Player() {
       <div
         className="nav-zone left"
         onClick={() => {
-          if (!paused) prevSlideAction();
+          if (suppressClickRef.current || paused) return;
+          prevSlideAction();
         }}
       />
       <div
         className="nav-zone right"
         onClick={() => {
-          if (!paused) nextSlideAction(colleague.slides.length);
+          if (suppressClickRef.current || paused) return;
+          nextSlideAction(colleague.slides.length);
         }}
       />
 
@@ -137,6 +229,27 @@ export function Player() {
           </div>
         )}
 
+      {/* Autoplay-blocked fallback. Most browsers permit playback after the
+          unlock click, but iOS Low Power mode and a few corporate browsers
+          still block it — this gives the user one tap to start the music. */}
+      {autoplayBlocked && audioEnabled && (
+        <div
+          id="unmute-overlay"
+          onPointerDown={(e) => {
+            // Don't let this tap also trigger hold-to-pause on the player root.
+            e.stopPropagation();
+          }}
+          onClick={(e) => {
+            e.stopPropagation();
+            unblockAutoplay();
+          }}
+        >
+          <div className="unmute-inner">
+            <div className="unmute-icon">🔊</div>
+            <div className="unmute-text">Tap for sound</div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

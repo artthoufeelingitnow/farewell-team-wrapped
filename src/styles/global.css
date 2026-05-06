@@ -496,6 +496,20 @@
     inset: 0;
     z-index: 50;
     background: #000;
+    /* Suppress iOS long-press image save / text-callout / selection so the
+       hold-to-pause gesture doesn't trigger native UI. */
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+  /* Dim the progress bar + chrome while paused so it's clear the timer is
+     halted. Slide content stays at full opacity. */
+  .player.player-paused .progress-bar,
+  .player.player-paused .player-mute,
+  .player.player-paused .player-close,
+  .player.player-paused .now-playing {
+    opacity: 0.35;
+    transition: opacity 0.18s ease;
   }
   .progress-bar {
     position: absolute;
@@ -767,6 +781,16 @@
     padding: 28px 24px;
     max-height: 70vh;
     overflow-y: auto;
+    /* Sit above the side .nav-zone overlays (z 4) — without this, the letter
+       extends visually under the nav zones and only the middle 40% of its
+       width is actually scrollable. Same trick the photo-mosaic uses. */
+    position: relative;
+    z-index: 7;
+    /* iOS: opt into native momentum scrolling and only allow vertical pan,
+       so the hold-to-pause pointer handler on .player doesn't fight scrolls. */
+    touch-action: pan-y;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
   }
   .letter-wrap::-webkit-scrollbar { width: 6px; }
   .letter-wrap::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 3px; }
@@ -1421,7 +1445,7 @@
      content z-index so its position: fixed isn't overridden.
      The photo-mosaic is also excluded so it doesn't form a stacking context that
      would trap its child imgs' z-index 7 below the player's nav-zones (z 4). */
-  .slide > *:not(.fragment-layer):not(.slide-bg):not(.photo-lightbox):not(.photo-mosaic):not(.quote-mark):not(.keepsake) {
+  .slide > *:not(.fragment-layer):not(.slide-bg):not(.photo-lightbox):not(.photo-mosaic):not(.quote-mark):not(.keepsake):not(.letter-wrap) {
     position: relative;
     z-index: 2;
   }
@@ -1889,25 +1913,32 @@
     justify-content: center;
     z-index: 5;
   }
+  /* Save pill — opaque dark with a white halo so it reads on ANY card
+     background (cream, yellow, dark, photo-heavy). Earlier semi-transparent
+     white-on-white was invisible on light bgs. */
   .keepsake-save {
-    background: rgba(255, 255, 255, 0.12);
-    border: 1px solid rgba(255, 255, 255, 0.25);
+    background: #111;
+    border: 1.5px solid rgba(255, 255, 255, 0.95);
     color: #fff;
-    padding: 11px 24px;
+    padding: 12px 26px;
     border-radius: 999px;
     font-family: var(--font-body);
     font-size: 14px;
-    font-weight: 700;
+    font-weight: 800;
+    letter-spacing: 0.3px;
     cursor: pointer;
-    backdrop-filter: blur(6px);
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35), 0 0 0 3px rgba(0, 0, 0, 0.15);
     transition: background 0.15s ease, transform 0.12s ease;
   }
   .keepsake-save:hover:not(:disabled) {
-    background: rgba(255, 255, 255, 0.2);
+    background: #000;
     transform: scale(1.03);
   }
+  .keepsake-save:active:not(:disabled) {
+    transform: scale(0.98);
+  }
   .keepsake-save:disabled {
-    opacity: 0.65;
+    opacity: 0.7;
     cursor: wait;
   }
 

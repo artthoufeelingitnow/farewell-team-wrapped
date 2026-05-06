@@ -53,7 +53,10 @@ function slugify(name: string): string {
   return name.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'wrapped';
 }
 
-/** Capture the card node as a PNG and trigger a download.
+/** Capture the card node as a PNG. On mobile, hand the PNG to the OS share
+ *  sheet so the user gets "Save to Photos" / "Save to Gallery" options. On
+ *  desktop (no Web Share for files), fall back to a download link.
+ *
  *  `kind` becomes the filename prefix (e.g. "spirit-animal", "soundtrack").
  *
  *  Fonts must be fully loaded before capture or the export silently falls back
@@ -75,8 +78,36 @@ export async function saveCardAsPng(
       return !node.hasAttribute('data-html-to-image-ignore');
     },
   });
+
+  const filename = `${slugify(kind)}-${slugify(colleagueName)}.png`;
+
+  // Prefer native share sheet on mobile — gives users "Save Image" /
+  // "Save to Photos" / "Save to Gallery" directly into their camera roll
+  // instead of the browser's downloads folder.
+  const blob = await (await fetch(dataUrl)).blob();
+  const file = new File([blob], filename, { type: 'image/png' });
+
+  const nav = navigator as Navigator & {
+    canShare?: (data: ShareData & { files?: File[] }) => boolean;
+    share?: (data: ShareData & { files?: File[] }) => Promise<void>;
+  };
+  if (nav.canShare && nav.share && nav.canShare({ files: [file] })) {
+    try {
+      await nav.share({ files: [file], title: filename });
+      return;
+    } catch (err) {
+      // User cancelled the share sheet — that's not a failure.
+      if (err instanceof DOMException && err.name === 'AbortError') return;
+      // Otherwise (rare: SecurityError without user gesture, etc.) fall through
+      // to the download path so the user still gets *something*.
+    }
+  }
+
+  // Desktop / Web-Share-unavailable fallback.
+  const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
-  link.download = `${slugify(kind)}-${slugify(colleagueName)}.png`;
-  link.href = dataUrl;
+  link.download = filename;
+  link.href = url;
   link.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }

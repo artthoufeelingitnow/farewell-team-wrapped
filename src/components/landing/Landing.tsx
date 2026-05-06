@@ -3,6 +3,7 @@ import { useAppStore } from '../../store/appStore';
 import { usePlayerStore } from '../../store/playerStore';
 import type { Colleague } from '../../types';
 import { PasswordModal } from './PasswordModal';
+import { preloadColleagueAssets } from '../../utils/preload';
 
 export function Landing() {
   const data = useAppStore((s) => s.data);
@@ -15,6 +16,10 @@ export function Landing() {
   const visibleColleagues = data.colleagues.filter((c) => c.slides && c.slides.length > 0);
 
   const handleBubbleClick = (c: Colleague) => {
+    // Start fetching this deck's songs + videos as soon as intent is shown.
+    // The few seconds of password entry give the browser a head start so the
+    // first slide's audio is in cache by the time the player opens.
+    preloadColleagueAssets(c);
     if (!c.passwordHash) {
       openPlayer(c.id);
       return;

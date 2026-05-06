@@ -9,6 +9,11 @@ class AudioEngine {
   private current: AudioElWithUrl | null = null;
   private next: AudioElWithUrl | null = null;
   private fadeTimers: ReturnType<typeof setInterval>[] = [];
+  private autoplayBlockedListener: ((blocked: boolean) => void) | null = null;
+
+  onAutoplayBlocked(cb: ((blocked: boolean) => void) | null): void {
+    this.autoplayBlockedListener = cb;
+  }
 
   private clearFades(): void {
     this.fadeTimers.forEach((t) => clearInterval(t));
@@ -105,9 +110,20 @@ class AudioEngine {
     }
     newEl.__songUrl = slide.songUrl;
 
-    void newEl.play().catch(() => {
-      // Autoplay may be blocked silently; nothing to do.
-    });
+    void newEl.play().then(
+      () => {
+        // Successfully playing — make sure overlay clears in case it was up
+        // from a previous blocked attempt.
+        this.autoplayBlockedListener?.(false);
+      },
+      (err) => {
+        // Autoplay blocked (NotAllowedError) — surface to UI so it can prompt
+        // the user for a single tap to unblock.
+        if (err && err.name === 'NotAllowedError') {
+          this.autoplayBlockedListener?.(true);
+        }
+      },
+    );
 
     this.fade(newEl, 0, 1, FADE_MS);
 
@@ -153,6 +169,38 @@ class AudioEngine {
         // ignore
       }
     });
+  }
+
+  /** Hold-to-pause: stop playback without losing the current track or its
+   *  position, so resumeCurrent() can pick up where it left off. */
+  pauseCurrent(): void {
+    if (!this.current) return;
+    try {
+      this.current.pause();
+    } catch {
+      // ignore
+    }
+  }
+
+  resumeCurrent(): void {
+    if (!this.current) return;
+    void this.current.play().catch(() => {
+      // If the resume gesture isn't enough (rare — release-tap should be a
+      // user gesture), just stay paused. Next nav action will retry.
+    });
+  }
+
+  /** User tapped the unmute overlay — try playing the current track again
+   *  inside that user gesture. Same call shape as resumeCurrent but ignores
+   *  the pausedByUser flag (the overlay only appears when audio never started). */
+  unblockAutoplay(): void {
+    if (!this.current) return;
+    void this.current.play().then(
+      () => this.autoplayBlockedListener?.(false),
+      () => {
+        // Still blocked — leave the overlay up.
+      },
+    );
   }
 }
 
