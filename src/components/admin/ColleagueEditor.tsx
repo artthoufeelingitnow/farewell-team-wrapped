@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useAppStore } from '../../store/appStore';
 import { usePlayerStore } from '../../store/playerStore';
-import type { Colleague, Slide, SlideType } from '../../types';
+import type { Colleague, ColleagueCategory, Slide, SlideType } from '../../types';
 import { sha256, makeDefaultSlide } from '../../utils';
 import { showToast } from '../../store/toastStore';
 import { SlideEditor } from './SlideEditor';
@@ -106,6 +106,36 @@ export function ColleagueEditor({ colleague }: Props) {
               placeholder={colleague.passwordHash ? 'Leave blank to keep' : 'Set a password'}
               onChange={(e) => setPendingPassword(e.target.value)}
             />
+          </div>
+          <div>
+            <label className="field-label">Category</label>
+            <select
+              className="field-select"
+              value={colleague.category ?? 'trainer'}
+              onChange={(e) =>
+                updateColleague(colleague.id, {
+                  category: e.target.value as ColleagueCategory,
+                })
+              }
+            >
+              <option value="trainer">Trainer</option>
+              <option value="yfa">YFA</option>
+            </select>
+          </div>
+          <div>
+            <label className="field-label">Visibility</label>
+            <select
+              className="field-select"
+              value={colleague.hidden ? 'hidden' : 'visible'}
+              onChange={(e) =>
+                updateColleague(colleague.id, {
+                  hidden: e.target.value === 'hidden',
+                })
+              }
+            >
+              <option value="visible">Visible</option>
+              <option value="hidden">Hidden (dimmed, not clickable)</option>
+            </select>
           </div>
         </div>
 

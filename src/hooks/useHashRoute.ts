@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react';
 
-export type Route = 'landing' | 'admin';
+export type Route = 'landing' | 'admin' | 'trainer' | 'yfa';
 
 function readRoute(): Route {
   if (typeof window === 'undefined') return 'landing';
-  return window.location.hash.slice(1) === 'admin' ? 'admin' : 'landing';
+  const h = window.location.hash.slice(1);
+  if (h === 'admin' || h === 'trainer' || h === 'yfa') return h;
+  return 'landing';
 }
 
 export function useHashRoute(): [Route, (next: Route) => void] {
@@ -17,7 +19,7 @@ export function useHashRoute(): [Route, (next: Route) => void] {
   }, []);
 
   const navigate = (next: Route) => {
-    window.location.hash = next === 'admin' ? 'admin' : '';
+    window.location.hash = next === 'landing' ? '' : next;
   };
 
   return [route, navigate];

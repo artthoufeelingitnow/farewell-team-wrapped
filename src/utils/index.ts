@@ -2,6 +2,7 @@ import type {
   Slide,
   SlideType,
   Colleague,
+  ColleagueCategory,
   AppData,
   BgConfig,
   GradientBg,
@@ -133,12 +134,15 @@ export function stripTransientFields(slide: Slide): Slide {
 }
 
 export function cleanColleagueForExport(c: Colleague): Colleague {
-  return {
+  const out: Colleague = {
     id: c.id,
     name: c.name,
     passwordHash: c.passwordHash,
     slides: (c.slides || []).map(stripTransientFields),
   };
+  if (c.category) out.category = c.category;
+  if (c.hidden) out.hidden = true;
+  return out;
 }
 
 export function getSlideDuration(slide: Slide | undefined): number {
@@ -373,10 +377,15 @@ function migrateColleague(c: Colleague): Colleague {
     }
   }
 
-  return {
+  const category: ColleagueCategory =
+    raw.category === 'yfa' ? 'yfa' : 'trainer';
+  const out: Colleague = {
     id: c.id,
     name: c.name,
     passwordHash: c.passwordHash,
     slides: outSlides,
+    category,
   };
+  if (raw.hidden === true) out.hidden = true;
+  return out;
 }

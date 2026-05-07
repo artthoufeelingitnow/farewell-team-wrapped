@@ -251,11 +251,18 @@ export type Slide =
   | SoundtrackSlide
   | SignoffSlide;
 
+/** Landing-page grouping. Trainers vs YFA get rendered as separate sections. */
+export type ColleagueCategory = 'trainer' | 'yfa';
+
 export interface Colleague {
   id: string;
   name: string;
   passwordHash: string;
   slides: Slide[];
+  /** Landing-page grouping. Legacy data without this is treated as 'trainer'. */
+  category?: ColleagueCategory;
+  /** When true, the bubble still renders on the landing page but is non-clickable and dimmed. */
+  hidden?: boolean;
 }
 
 export interface AppMeta {

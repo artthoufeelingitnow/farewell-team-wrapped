@@ -45,6 +45,25 @@
     max-width: 540px;
     line-height: 1.55;
   }
+  .bubble-group {
+    width: 100%;
+    max-width: 900px;
+    z-index: 2;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin-bottom: 36px;
+  }
+  .bubble-group:last-child { margin-bottom: 0; }
+  .bubble-group-heading {
+    font-family: var(--font-display);
+    font-size: 22px;
+    font-weight: 400;
+    color: rgba(255,255,255,0.55);
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    margin-bottom: 18px;
+  }
   .bubble-stage {
     width: 100%;
     max-width: 900px;
@@ -75,6 +94,87 @@
     transform: translateY(-4px) scale(1.05);
     border-color: rgba(255,255,255,0.4);
   }
+  .name-bubble-hidden,
+  .name-bubble:disabled {
+    opacity: 0.25;
+    cursor: not-allowed;
+    pointer-events: none;
+    filter: grayscale(0.4);
+  }
+
+  /* Two big bubbles on the entry-level landing — one per category. */
+  .category-stage {
+    width: 100%;
+    max-width: 720px;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    align-items: center;
+    gap: 24px;
+    z-index: 2;
+  }
+  .category-bubble {
+    flex: 1 1 240px;
+    min-width: 220px;
+    max-width: 320px;
+    aspect-ratio: 1 / 1;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.18);
+    backdrop-filter: blur(10px);
+    cursor: pointer;
+    color: #fff;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    transition: all 0.25s ease;
+    animation: float 6s ease-in-out infinite;
+    padding: 24px;
+  }
+  .category-bubble:nth-child(2) { animation-delay: -3s; }
+  .category-bubble:hover:not(:disabled) {
+    background: rgba(255,255,255,0.14);
+    transform: translateY(-6px) scale(1.04);
+    border-color: rgba(255,255,255,0.45);
+  }
+  .category-bubble:disabled {
+    opacity: 0.25;
+    cursor: not-allowed;
+    filter: grayscale(0.4);
+  }
+  .category-bubble-label {
+    font-family: var(--font-display);
+    font-size: clamp(32px, 5vw, 44px);
+    font-weight: 400;
+    letter-spacing: 1px;
+    background: linear-gradient(90deg, #FF6B9D 0%, #FFC75F 50%, #4ECDC4 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  .category-bubble-count {
+    font-size: 13px;
+    color: rgba(255,255,255,0.55);
+    letter-spacing: 1px;
+    text-transform: uppercase;
+  }
+
+  /* Subtle "← back" link sitting above a category's name bubbles. */
+  .back-link {
+    background: none;
+    border: none;
+    color: rgba(255,255,255,0.55);
+    font-family: var(--font-body);
+    font-size: 14px;
+    cursor: pointer;
+    padding: 8px 12px;
+    margin-bottom: 8px;
+    letter-spacing: 0.5px;
+    transition: color 0.2s ease;
+  }
+  .back-link:hover { color: rgba(255,255,255,0.95); }
   .name-bubble:nth-child(2n) { animation-delay: -2s; }
   .name-bubble:nth-child(3n) { animation-delay: -4s; }
   .name-bubble:nth-child(4n) { animation-delay: -1s; }
