@@ -103,18 +103,24 @@ function main() {
         skippedCount++;
         return;
       }
+      const slides = Array.isArray(c.slides) ? c.slides.map(stripTransient) : [];
+      // Only include colleagues with a fully-formed, encryptable deck in the
+      // public index. Anything without a password or without slides would
+      // render as a bubble that 404s on click — better to omit them entirely
+      // until the admin finishes setting them up.
+      if (!c.password || slides.length === 0) {
+        console.warn(
+          `⚠ ${c.name} (${c.id}) — ${!c.password ? 'no password' : 'no slides'}, omitting from index.`,
+        );
+        skippedCount++;
+        return;
+      }
       indexEntries.push({
         id: c.id,
         name: c.name,
         ...(c.category ? { category: c.category } : {}),
         ...(c.hidden ? { hidden: true } : {}),
       });
-      if (!c.password) {
-        console.warn(`⚠ ${c.name} (${c.id}) has no password — skipping encryption.`);
-        skippedCount++;
-        return;
-      }
-      const slides = Array.isArray(c.slides) ? c.slides.map(stripTransient) : [];
       const blob = await encryptJson(slides, c.password);
       writeFileSync(join(OUT_COLLEAGUES, `${c.id}.json.enc`), JSON.stringify(blob));
       encryptedCount++;

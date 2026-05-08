@@ -8,6 +8,7 @@ import { useHashRoute } from '../../hooks/useHashRoute';
 
 export function Landing() {
   const data = useAppStore((s) => s.data);
+  const isExportedFile = useAppStore((s) => s.isExportedFile);
   const openPlayer = usePlayerStore((s) => s.openPlayer);
   const markUnlocked = usePlayerStore((s) => s.markUnlocked);
   const unlockedIds = usePlayerStore((s) => s.unlockedColleagueIds);
@@ -15,7 +16,13 @@ export function Landing() {
 
   const [pwTarget, setPwTarget] = useState<Colleague | null>(null);
 
-  const visibleColleagues = data.colleagues.filter((c) => c.slides && c.slides.length > 0);
+  // In production, the index file populates colleague shells with empty
+  // slide arrays — slides arrive lazily after decrypt. So filtering by
+  // `slides.length > 0` would hide everyone. In admin/dev, we DO want
+  // that filter so empty draft colleagues don't appear on the landing.
+  const visibleColleagues = isExportedFile
+    ? data.colleagues
+    : data.colleagues.filter((c) => c.slides && c.slides.length > 0);
   const trainers = visibleColleagues.filter((c) => (c.category ?? 'trainer') === 'trainer');
   const yfas = visibleColleagues.filter((c) => c.category === 'yfa');
 
