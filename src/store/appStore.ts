@@ -56,6 +56,11 @@ interface AppState {
    *  the admin route so a viewer-flow `loadIndex()` doesn't keep its grip on
    *  the store. Sets `isExportedFile: false` since we're back on draft data. */
   reloadFromStorage: () => void;
+  /** Replace the entire admin store with imported data and persist it. Used by
+   *  the admin's "Import data.json" recovery button — restores the full draft
+   *  (slides + plaintext passwords) into localStorage from a previously-exported
+   *  source-of-truth file. */
+  importAdminData: (data: AppData) => void;
 }
 
 export const useAppStore = create<AppState>((set, get) => ({
@@ -179,5 +184,11 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   reloadFromStorage: () => {
     set({ data: loadFromStorage(), isExportedFile: false });
+  },
+
+  importAdminData: (incoming) => {
+    const migrated = migrateAppData(incoming);
+    set({ data: migrated, isExportedFile: false });
+    persist(migrated);
   },
 }));

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useAppStore } from '../../store/appStore';
 import { uid, cleanColleagueForExport } from '../../utils';
 import { showToast } from '../../store/toastStore';
@@ -6,13 +6,16 @@ import { useHashRoute } from '../../hooks/useHashRoute';
 import { ColleagueList } from './ColleagueList';
 import { ColleagueEditor } from './ColleagueEditor';
 import { MetaEditor } from './MetaEditor';
+import type { AppData } from '../../types';
 
 export function Admin() {
   const data = useAppStore((s) => s.data);
   const colleagues = data.colleagues;
   const addColleague = useAppStore((s) => s.addColleague);
   const resetAll = useAppStore((s) => s.resetAll);
+  const importAdminData = useAppStore((s) => s.importAdminData);
   const [, navigate] = useHashRoute();
+  const importInputRef = useRef<HTMLInputElement>(null);
 
   const [selectedId, setSelectedId] = useState<string | null>(colleagues[0]?.id ?? null);
   const [metaOpen, setMetaOpen] = useState(false);
@@ -23,6 +26,34 @@ export function Admin() {
     const newCol = { id: uid(), name: '', slides: [] };
     addColleague(newCol);
     setSelectedId(newCol.id);
+  };
+
+  const handleImport = (file: File) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const parsed = JSON.parse(reader.result as string) as AppData;
+        if (!parsed || !Array.isArray(parsed.colleagues)) {
+          showToast('Invalid data.json — no colleagues array');
+          return;
+        }
+        if (
+          colleagues.length > 0 &&
+          !confirm(
+            `Replace your current admin draft (${colleagues.length} colleagues) with this file (${parsed.colleagues.length})? This overwrites localStorage.`,
+          )
+        ) {
+          return;
+        }
+        importAdminData(parsed);
+        setSelectedId(parsed.colleagues[0]?.id ?? null);
+        showToast(`Imported ${parsed.colleagues.length} colleagues`);
+      } catch (e) {
+        console.error(e);
+        showToast('Could not parse data.json');
+      }
+    };
+    reader.readAsText(file);
   };
 
   const handleReset = () => {
@@ -69,6 +100,25 @@ export function Admin() {
               <button className="btn btn-sm btn-ghost" onClick={handleExport}>
                 Export final file
               </button>
+              <button
+                className="btn btn-sm btn-ghost"
+                onClick={() => importInputRef.current?.click()}
+                title="Restore admin draft from a previously-exported data.json"
+              >
+                Import data.json
+              </button>
+              <input
+                ref={importInputRef}
+                type="file"
+                accept="application/json,.json"
+                style={{ display: 'none' }}
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) handleImport(file);
+                  // Reset so re-importing the same filename fires onChange.
+                  e.target.value = '';
+                }}
+              />
               <button className="btn btn-sm btn-ghost" onClick={() => navigate('landing')}>
                 View landing
               </button>
