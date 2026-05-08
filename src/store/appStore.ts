@@ -52,6 +52,10 @@ interface AppState {
   /** Populate one colleague's slides post-decrypt. Does NOT persist —
    *  decrypted decks are kept in memory only, so a refresh re-prompts. */
   setColleagueSlides: (colleagueId: string, slides: Slide[]) => void;
+  /** Re-read the admin's source-of-truth from localStorage. Used when entering
+   *  the admin route so a viewer-flow `loadIndex()` doesn't keep its grip on
+   *  the store. Sets `isExportedFile: false` since we're back on draft data. */
+  reloadFromStorage: () => void;
 }
 
 export const useAppStore = create<AppState>((set, get) => ({
@@ -171,5 +175,9 @@ export const useAppStore = create<AppState>((set, get) => ({
     };
     set({ data: next });
     // Intentionally not persisted — decrypted slides stay in memory only.
+  },
+
+  reloadFromStorage: () => {
+    set({ data: loadFromStorage(), isExportedFile: false });
   },
 }));

@@ -1,20 +1,33 @@
 import { useEffect } from 'react';
 import { useAppStore } from '../store/appStore';
 import type { AppDataIndex } from '../types';
+import { useHashRoute } from './useHashRoute';
 
 /**
- * On mount, fetch /data/index.json (relative). If present and valid, replace
- * store data with the index (meta + colleague shells without slides). The
- * per-colleague slides are fetched + decrypted lazily by PasswordModal when
- * the user enters their password.
+ * Route-aware data source.
  *
- * In dev (no index file in public/), this 404s silently and the admin's
+ * On viewer routes (landing / trainer / yfa): fetches `${BASE_URL}data/index.json`
+ * and replaces the store with meta + colleague shells (no slides). Per-colleague
+ * slides are fetched + decrypted lazily by PasswordModal when the user enters
+ * their password.
+ *
+ * On the admin route: re-reads the admin's source-of-truth from localStorage,
+ * so a previous viewer-flow `loadIndex()` doesn't leave the store in viewer
+ * shape (no slides, no passwords) when the user navigates back to admin.
+ *
+ * In dev (no index file in public/), the fetch 404s silently and the admin's
  * localStorage data is used.
  */
 export function useDataJsonLoader() {
   const loadIndex = useAppStore((s) => s.loadIndex);
+  const reloadFromStorage = useAppStore((s) => s.reloadFromStorage);
+  const [route] = useHashRoute();
 
   useEffect(() => {
+    if (route === 'admin') {
+      reloadFromStorage();
+      return;
+    }
     let cancelled = false;
     fetch(`${import.meta.env.BASE_URL}data/index.json`, { cache: 'no-store' })
       .then((res) => {
@@ -33,5 +46,5 @@ export function useDataJsonLoader() {
     return () => {
       cancelled = true;
     };
-  }, [loadIndex]);
+  }, [route, loadIndex, reloadFromStorage]);
 }
