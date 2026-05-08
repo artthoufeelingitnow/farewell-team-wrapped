@@ -2,8 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useAppStore } from '../../store/appStore';
 import { usePlayerStore } from '../../store/playerStore';
 import type { Colleague, ColleagueCategory, Slide, SlideType } from '../../types';
-import { sha256, makeDefaultSlide } from '../../utils';
-import { showToast } from '../../store/toastStore';
+import { makeDefaultSlide } from '../../utils';
 import { SlideEditor } from './SlideEditor';
 import { AddSlideMenu } from './AddSlideMenu';
 
@@ -21,7 +20,6 @@ export function ColleagueEditor({ colleague }: Props) {
 
   const openPlayer = usePlayerStore((s) => s.openPlayer);
 
-  const [pendingPassword, setPendingPassword] = useState('');
   const [showAddSlide, setShowAddSlide] = useState(false);
 
   const slides = colleague.slides ?? [];
@@ -57,18 +55,6 @@ export function ColleagueEditor({ colleague }: Props) {
     prevColleagueIdRef.current = colleague.id;
   }, [slides.length, colleague.id]);
 
-  const save = async () => {
-    const patch: Partial<Colleague> = {};
-    if (pendingPassword) {
-      patch.passwordHash = await sha256(pendingPassword);
-      setPendingPassword('');
-      showToast(`Password set for ${colleague.name || 'colleague'}`);
-    }
-    if (Object.keys(patch).length > 0) {
-      updateColleague(colleague.id, patch);
-    }
-  };
-
   const handleAddSlide = (type: SlideType) => {
     addSlide(colleague.id, makeDefaultSlide(type, colleague.name));
     setShowAddSlide(false);
@@ -97,14 +83,14 @@ export function ColleagueEditor({ colleague }: Props) {
           </div>
           <div>
             <label className="field-label">
-              Password {colleague.passwordHash ? '(set ✓)' : ''}
+              Password {colleague.password ? '(set ✓)' : '(needed for encryption)'}
             </label>
             <input
               type="text"
               className="field-input"
-              value={pendingPassword}
-              placeholder={colleague.passwordHash ? 'Leave blank to keep' : 'Set a password'}
-              onChange={(e) => setPendingPassword(e.target.value)}
+              value={colleague.password ?? ''}
+              placeholder="Plaintext — used as the AES-GCM key"
+              onChange={(e) => updateColleague(colleague.id, { password: e.target.value })}
             />
           </div>
           <div>
@@ -185,11 +171,6 @@ export function ColleagueEditor({ colleague }: Props) {
         <div className="left">
           <button className="btn btn-sm btn-danger" onClick={handleDelete}>
             Delete colleague
-          </button>
-        </div>
-        <div className="right">
-          <button className="btn btn-sm btn-primary" onClick={() => void save()}>
-            Save changes
           </button>
         </div>
       </div>

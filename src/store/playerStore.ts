@@ -12,6 +12,11 @@ interface PlayerState {
    *  but lets audio keep playing — the song is the emotional underscore for
    *  the memory the user is lingering on. Distinct from `paused` on purpose. */
   previewingMedia: boolean;
+  /** True while the tab/app is in the background (`document.hidden`). Halts
+   *  auto-advance AND pauses audio — same behavior as user-driven `paused`,
+   *  but tracked separately so resuming on tab return doesn't override an
+   *  in-flight hold-to-pause. */
+  pausedByVisibility: boolean;
   unlockedColleagueIds: Set<string>;
 
   openPlayer: (colleagueId: string, opts?: { preview?: boolean }) => void;
@@ -22,6 +27,7 @@ interface PlayerState {
   toggleAudio: () => void;
   setPaused: (p: boolean) => void;
   setPreviewingMedia: (p: boolean) => void;
+  setPausedByVisibility: (p: boolean) => void;
   markUnlocked: (colleagueId: string) => void;
 }
 
@@ -32,6 +38,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   audioEnabled: true,
   paused: false,
   previewingMedia: false,
+  pausedByVisibility: false,
   unlockedColleagueIds: new Set(),
 
   openPlayer: (colleagueId, opts) =>
@@ -69,6 +76,8 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   setPaused: (paused) => set({ paused }),
 
   setPreviewingMedia: (previewingMedia) => set({ previewingMedia }),
+
+  setPausedByVisibility: (pausedByVisibility) => set({ pausedByVisibility }),
 
   markUnlocked: (colleagueId) =>
     set((s) => ({ unlockedColleagueIds: new Set([...s.unlockedColleagueIds, colleagueId]) })),

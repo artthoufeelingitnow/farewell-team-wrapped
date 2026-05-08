@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { AppData, Colleague, Slide } from '../types';
+import type { AppData, AppDataIndex, Colleague, Slide } from '../types';
 import { STORAGE_KEY } from '../utils/constants';
 import { migrateAppData } from '../utils';
 import { showToast } from './toastStore';
@@ -45,8 +45,13 @@ interface AppState {
   moveSlide: (colleagueId: string, index: number, dir: 'up' | 'down') => void;
   resetAll: () => void;
 
-  /** Replace the entire dataset (used when /data.json is fetched on a deployed site). */
-  loadFromExport: (data: AppData) => void;
+  /** Replace the dataset's meta + colleague-shells from `data/index.json`.
+   *  Slides start empty for each colleague; they get filled in on demand by
+   *  `setColleagueSlides` after the password decrypts the per-colleague file. */
+  loadIndex: (index: AppDataIndex) => void;
+  /** Populate one colleague's slides post-decrypt. Does NOT persist —
+   *  decrypted decks are kept in memory only, so a refresh re-prompts. */
+  setColleagueSlides: (colleagueId: string, slides: Slide[]) => void;
 }
 
 export const useAppStore = create<AppState>((set, get) => ({
@@ -140,8 +145,31 @@ export const useAppStore = create<AppState>((set, get) => ({
     persist(EMPTY_DATA);
   },
 
-  loadFromExport: (data) => {
-    set({ data: migrateAppData(data), isExportedFile: true });
-    // Don't persist exported data to localStorage — viewers shouldn't accumulate state.
+  loadIndex: (index) => {
+    // Build colleague shells (no slides yet — those arrive post-decrypt). Run
+    // them through migrateAppData so category/hidden defaults stay consistent.
+    const migrated = migrateAppData({
+      meta: index.meta,
+      colleagues: index.colleagues.map((c) => ({
+        id: c.id,
+        name: c.name,
+        slides: [],
+        category: c.category,
+        hidden: c.hidden,
+      })),
+    });
+    set({ data: migrated, isExportedFile: true });
+    // Don't persist — viewers shouldn't accumulate state.
+  },
+
+  setColleagueSlides: (colleagueId, slides) => {
+    const next = {
+      ...get().data,
+      colleagues: get().data.colleagues.map((c) =>
+        c.id === colleagueId ? { ...c, slides } : c,
+      ),
+    };
+    set({ data: next });
+    // Intentionally not persisted — decrypted slides stay in memory only.
   },
 }));

@@ -1,31 +1,30 @@
 import { useEffect } from 'react';
 import { useAppStore } from '../store/appStore';
-import type { AppData } from '../types';
+import type { AppDataIndex } from '../types';
 
 /**
- * On mount, attempt to fetch /data.json (relative). If present and valid, replace store data.
- * This is how exported deployments deliver content: the user drops dist/ + data.json onto Netlify,
- * and the static app pulls its content from the JSON file at runtime.
+ * On mount, fetch /data/index.json (relative). If present and valid, replace
+ * store data with the index (meta + colleague shells without slides). The
+ * per-colleague slides are fetched + decrypted lazily by PasswordModal when
+ * the user enters their password.
  *
- * In dev (no data.json in public/), this 404s silently and localStorage data is used.
+ * In dev (no index file in public/), this 404s silently and the admin's
+ * localStorage data is used.
  */
 export function useDataJsonLoader() {
-  const loadFromExport = useAppStore((s) => s.loadFromExport);
+  const loadIndex = useAppStore((s) => s.loadIndex);
 
   useEffect(() => {
     let cancelled = false;
-    // Use Vite's BASE_URL so this resolves correctly under GitHub Pages' subpath
-    // (/farewell-team-wrapped/) regardless of whether the user lands with or without
-    // the trailing slash.
-    fetch(`${import.meta.env.BASE_URL}data.json`, { cache: 'no-store' })
+    fetch(`${import.meta.env.BASE_URL}data/index.json`, { cache: 'no-store' })
       .then((res) => {
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        return res.json() as Promise<AppData>;
+        return res.json() as Promise<AppDataIndex>;
       })
-      .then((data) => {
+      .then((index) => {
         if (cancelled) return;
-        if (data && Array.isArray(data.colleagues)) {
-          loadFromExport(data);
+        if (index && Array.isArray(index.colleagues)) {
+          loadIndex(index);
         }
       })
       .catch(() => {
@@ -34,5 +33,5 @@ export function useDataJsonLoader() {
     return () => {
       cancelled = true;
     };
-  }, [loadFromExport]);
+  }, [loadIndex]);
 }

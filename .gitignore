@@ -12,7 +12,9 @@ dist
 # Original single-file backup
 index.original.html
 
-# Real content stays out of the repo (public repo = browseable source)
+# Real content stays out of the repo (public repo = browseable source).
+# data.json is the admin source-of-truth (contains plaintext passwords).
+# `npm run encrypt-data` reads it and writes the committed `data/` tree.
 data.json
 public/data.json
 

@@ -25,18 +25,14 @@ export function Landing() {
 
   const handleBubbleClick = (c: Colleague) => {
     if (c.hidden) return;
-    // Start fetching this deck's songs + videos as soon as intent is shown.
-    // The few seconds of password entry give the browser a head start so the
-    // first slide's audio is in cache by the time the player opens.
-    preloadColleagueAssets(c);
-    if (!c.passwordHash) {
+    // Already unlocked this session? The slides are in-memory, just open.
+    if (unlockedIds.has(c.id) && c.slides.length > 0) {
+      preloadColleagueAssets(c);
       openPlayer(c.id);
       return;
     }
-    if (unlockedIds.has(c.id)) {
-      openPlayer(c.id);
-      return;
-    }
+    // Otherwise: prompt for password. Slides aren't loaded yet, so preload
+    // has nothing to chew on; it kicks off in `handleUnlock` once we have them.
     setPwTarget(c);
   };
 
@@ -54,6 +50,10 @@ export function Landing() {
 
   const handleUnlock = () => {
     if (!pwTarget) return;
+    // After unlock, the colleague's slides are populated in the store. Re-read
+    // the latest version so preload sees them, then mark + open.
+    const latest = useAppStore.getState().data.colleagues.find((c) => c.id === pwTarget.id);
+    if (latest) preloadColleagueAssets(latest);
     markUnlocked(pwTarget.id);
     openPlayer(pwTarget.id);
     setPwTarget(null);

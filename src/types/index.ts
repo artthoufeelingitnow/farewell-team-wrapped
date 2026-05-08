@@ -257,7 +257,11 @@ export type ColleagueCategory = 'trainer' | 'yfa';
 export interface Colleague {
   id: string;
   name: string;
-  passwordHash: string;
+  /** Plaintext password. Lives in admin localStorage and admin's `data.json`
+   *  source-of-truth ONLY — stripped before encryption (it IS the encryption
+   *  key, so it never lands in any committed file). Empty/undefined = the
+   *  colleague has no password yet and their deck cannot be encrypted/decrypted. */
+  password?: string;
   slides: Slide[];
   /** Landing-page grouping. Legacy data without this is treated as 'trainer'. */
   category?: ColleagueCategory;
@@ -274,4 +278,18 @@ export interface AppMeta {
 export interface AppData {
   meta: AppMeta;
   colleagues: Colleague[];
+}
+
+/** Public landing-only entry. No slides, no password — just enough to draw the bubble. */
+export interface ColleagueIndexEntry {
+  id: string;
+  name: string;
+  category?: ColleagueCategory;
+  hidden?: boolean;
+}
+
+/** Shape of `data/index.json` shipped to viewers. */
+export interface AppDataIndex {
+  meta: AppMeta;
+  colleagues: ColleagueIndexEntry[];
 }

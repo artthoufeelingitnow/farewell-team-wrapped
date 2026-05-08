@@ -19,7 +19,7 @@ export function ColleagueList({ colleagues, selectedId, onSelect, onAdd }: Props
         >
           <span>{c.name || '(unnamed)'}</span>
           <span className="meta">
-            {c.slides?.length || 0} slides {c.passwordHash ? '🔒' : ''}
+            {c.slides?.length || 0} slides {c.password ? '🔒' : '⚠️'}
           </span>
         </div>
       ))}

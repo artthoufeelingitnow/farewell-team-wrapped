@@ -24,7 +24,12 @@ farewell_wrapped/
 ├── public/
 │   └── videos/             # hosted .mp4/.webm files for mosaic video media
 ├── docs/                   # design briefs (MEMORY_ORB_BRIEF.md, SPIRIT_ANIMAL_BRIEF.md)
-├── data.json.enc           # ENCRYPTED real content; data.json itself is gitignored
+├── data/                   # COMMITTED encrypted artifacts — produced by `npm run encrypt-data`
+│   ├── index.json          #   public: meta + colleague shells (no slides, no passwords)
+│   └── colleagues/         #   per-colleague AES-GCM blobs, key = each colleague's plaintext password
+│       └── <id>.json.enc
+├── data.json               # gitignored. Admin source-of-truth (plaintext passwords on each colleague)
+├── scripts/encrypt-data.mjs # data.json → data/index.json + data/colleagues/*.json.enc (Node WebCrypto)
 ├── CLAUDE.md               # ← you are here. MUST stay at root for tools to load it.
 ├── src/
 │   ├── types/
@@ -63,14 +68,29 @@ Three Zustand stores in `src/store/`:
 ### Data model
 
 ```ts
+// In-memory + admin localStorage (the source-of-truth `data.json`):
 AppData = {
   meta: { title, subtitle, farewellNote },
   colleagues: [{
-    id, name, passwordHash,  // SHA-256 of password
+    id, name,
+    password?,               // plaintext, ADMIN-ONLY — IS the AES-GCM key. Stripped before encryption.
     slides: Slide[],         // discriminated union, see src/types/index.ts
+    category?: 'trainer' | 'yfa',
+    hidden?: boolean,
   }]
 }
+
+// What viewers actually fetch — `data/index.json` (no slides, no passwords):
+AppDataIndex = {
+  meta: { title, subtitle, farewellNote },
+  colleagues: [{ id, name, category?, hidden? }]
+}
 ```
+
+Slides for a given colleague live in `data/colleagues/<id>.json.enc` and only
+arrive in the store after `PasswordModal` decrypts them with the entered
+password. `setColleagueSlides(id, slides)` populates them; not persisted, so
+a refresh re-prompts.
 
 `Slide` is a discriminated union over `type`. Each slide carries:
 - `bg: BgConfig` — discriminated union: `{kind:'preset', preset}` | `{kind:'gradient', from, to, angle, shape, textColor}` | `{kind:'lava', baseColor, blobs[], speed, blur, textColor}`
@@ -108,9 +128,10 @@ Each slide type has its own view component in `src/components/slides/` and gets 
 ### Player gestures + timing
 
 - **Hold-to-pause** (Instagram-style). Pointer-event handlers on `.player` start a 220ms timer (`HOLD_PAUSE_MS`); if the pointer hasn't moved more than 8px (`HOLD_MOVE_THRESHOLD_PX`) when it fires, `paused` flips true. Release flips it back. Move-threshold cancels the hold so swipes/scrolls (e.g. inside `.letter-wrap`) don't accidentally pause. The trailing `click` after a hold is suppressed via a ref so a hold never doubles as a nav-zone tap.
-- **Two pause causes, intentionally distinct:**
+- **Three pause causes, intentionally distinct:**
   - `paused` (hold-to-pause) — halts the auto-advance timer AND pauses audio. Audio keeps its position so resume picks up mid-bar.
-  - `previewingMedia` (mosaic lightbox open) — halts auto-advance but lets audio keep playing. The song is the emotional underscore for the memory the user is lingering on; cutting it mid-bar to zoom on a photo broke the moment. `useAudioEngine` only watches `paused`; the player's auto-advance + keyboard nav watch `paused || previewingMedia`.
+  - `pausedByVisibility` (tab/app backgrounded — `document.hidden` is true) — same effect as `paused`, but tracked separately so coming back to the tab doesn't override an in-flight hold. Set by a `visibilitychange` listener in `Player.tsx`.
+  - `previewingMedia` (mosaic lightbox open) — halts auto-advance but lets audio keep playing. The song is the emotional underscore for the memory the user is lingering on; cutting it mid-bar to zoom on a photo broke the moment. `useAudioEngine` is fed `paused: paused || pausedByVisibility` (visibility halts audio, mosaic doesn't); the player's auto-advance + keyboard nav watch `halted || previewingMedia` where `halted = paused || pausedByVisibility`.
 - **Timer resume across pauses.** `elapsedRef` accumulates elapsed-ms inside the interval tick. On unpause, `startedAt = Date.now() - elapsedRef.current`, so the first post-resume tick reads back the prior elapsed value. A separate effect resets `elapsedRef` only when `slideIndex` / `currentColleagueId` changes — pause toggles preserve it.
 - **Autoplay-blocked overlay.** `#unmute-overlay` renders when `audioEngine.playSlide` first rejects with `NotAllowedError`. Single tap → `unblockAutoplay()` retries inside the user gesture. Mostly a fallback for iOS Low Power / corporate browsers; the unlock-click usually counts as activation.
 - **iOS gesture polish.** `.player` sets `-webkit-touch-callout: none` + `user-select: none` so a long press doesn't trigger native image-save / text-callout UI. `onContextMenu` is preventDefaulted on the player root.
@@ -124,10 +145,11 @@ Each slide type has its own view component in `src/components/slides/` and gets 
 ### Persistence + load order
 
 On boot:
-1. `appStore` initializes synchronously from **localStorage** (key `goodbye_wrapped_data_v1`). `migrateAppData()` runs on every load — coerces legacy shapes (string `bg`, `{kind:'preset'}` bg unchanged, mosaic `photos[]` → `media[]`, single fragment `dataUrl` → `dataUrls[]`, **`'orb-finale'` and `'wrapped-finale'` slides → `[spirit-animal, soundtrack]` pair** with bg/fragments/song fields preserved on the spirit-animal slide and the legacy colleague-level spirit animal data lifted onto its left section).
-2. `useDataJsonLoader` async-fetches `${BASE_URL}data.json`. If it returns 200 with valid JSON, calls `loadFromExport()` which **replaces** the store data (and skips persistence — viewers shouldn't accumulate state).
+1. `appStore` initializes synchronously from **localStorage** (key `goodbye_wrapped_data_v1`). `migrateAppData()` runs on every load — coerces legacy shapes (string `bg`, `{kind:'preset'}` bg unchanged, mosaic `photos[]` → `media[]`, single fragment `dataUrl` → `dataUrls[]`, **`'orb-finale'` and `'wrapped-finale'` slides → `[spirit-animal, soundtrack]` pair** with bg/fragments/song fields preserved on the spirit-animal slide and the legacy colleague-level spirit animal data lifted onto its left section). Migration also DROPS the legacy `passwordHash` field — it's no longer used; admin shows "(needed for encryption)" until the user enters a plaintext `password`.
+2. `useDataJsonLoader` async-fetches `${BASE_URL}data/index.json`. If it returns 200 with valid JSON, calls `loadIndex()` which **replaces** the store with meta + colleague shells (no slides yet). Marks `isExportedFile: true` so admin gates on it.
+3. On bubble click, `PasswordModal` fetches `${BASE_URL}data/colleagues/<id>.json.enc` and runs `decryptJson(blob, enteredPassword)` (AES-GCM via WebCrypto). Auth-tag mismatch surfaces as `WrongPasswordError` — UX-equivalent to the old hash-compare. On success, `setColleagueSlides()` writes them into the store.
 
-So in production, `data.json` always wins over a viewer's stale localStorage.
+So in production, the index file always wins over a viewer's stale localStorage; per-colleague slides only land in memory after a successful decrypt and are never persisted (refresh re-prompts).
 
 ## Conventions
 
@@ -156,17 +178,21 @@ Dark text mode driven by `.slide.text-dark` class set in JS via `bgNeedsDarkText
 
 Hosted on **GitHub Pages** at `https://artthoufeelingitnow.github.io/farewell-team-wrapped/` (repo: `artthoufeelingitnow/farewell-team-wrapped`, public).
 
-The repo is **public**, so committing real content directly would expose letter text + photos. Workaround: data ships as an **encrypted blob**.
+The repo is **public**, so committing real content directly would expose letter text + photos. Workaround: each colleague's deck ships as a **per-colleague AES-GCM blob**, encrypted with that colleague's own password. Only a small `index.json` (names + categories) is downloaded by every visitor; the heavy slide content (with base64 photos) is fetched and decrypted only after the right password is entered. This solves both privacy (slides are real-encrypted, not just hash-gated) AND landing-page weight (~10s of MB → a few KB).
 
 ### Content workflow
 
-1. Edit content in admin (`npm run dev`), click "Export final file" → downloads `data.json`
-2. Move it to repo root: `mv ~/Downloads/data.json .`
-3. `npm run encrypt-data` → produces `data.json.enc` (AES-256, PBKDF2 600k iterations)
-4. Commit + push `data.json.enc` (`data.json` is gitignored)
-5. The GitHub Actions workflow decrypts `data.json.enc` → `dist/data.json` using the `DATA_PASSPHRASE` repo secret, then deploys to Pages.
+1. Edit content in admin (`npm run dev`). Each colleague needs a `password` field set (plaintext — admin shows "(set ✓)" / "(needed for encryption)").
+2. Click "Export final file" → downloads `data.json`. **This file contains plaintext passwords** and is gitignored.
+3. Move it to repo root: `mv ~/Downloads/data.json .`
+4. `npm run encrypt-data` → reads `data.json` and writes:
+   - `data/index.json` — public, no slides, no passwords
+   - `data/colleagues/<id>.json.enc` — AES-GCM-256, PBKDF2-SHA256 600k iters, key = colleague's plaintext password
+   The script wipes `data/` first, so removing a colleague from `data.json` removes their `.json.enc` too.
+5. Commit + push the `data/` tree.
+6. GitHub Actions builds with `npm run build`, then copies the committed `data/` tree into `dist/data/`. No secrets needed in the workflow — there's no global passphrase anymore.
 
-To verify locally: `npm run decrypt-data` reverses the operation.
+`scripts/encrypt-data.mjs` (Node, WebCrypto) MUST stay in sync with `src/utils/crypto.ts` (browser, WebCrypto) — same format `{v, salt, iv, ciphertext}` with the same KDF parameters.
 
 ### Video workflow (separate from encrypted blob)
 
@@ -256,17 +282,17 @@ The 30s clip Apple returns always starts at the same point (usually the chorus).
 ### 4. Songs need internet at view time
 Song URLs reference Apple's CDN. Colleagues must be online when viewing.
 
-### 5. Password security caveat
-SHA-256 hashed but **goal is casual privacy, not real security**. Don't put anything in a deck that would be a problem if leaked.
+### 5. Password security
+Each colleague's deck is real AES-GCM encrypted with their own password (PBKDF2-SHA256 600k iters). The encrypted blob is what ships to GitHub; the slides only exist in plaintext server-side as the gitignored `data.json` and client-side after a successful decrypt. Still: a determined attacker who guesses the password gets the deck, and the password DOES travel through your laptop's localStorage (admin source-of-truth). Don't pick passwords that would be catastrophic if cracked, and don't share `data.json`.
 
 ### 6. Transient admin state in slides
 Admin-only fields leak into `slide` objects: `showSongPicker`, `songSearchQuery`, etc. `cleanColleagueForExport()` strips them. Add new transient fields to `TRANSIENT_FIELDS` in `src/utils/index.ts`.
 
-### 7. Encrypt + decrypt iter count must match
-`-iter 600000` is hardcoded in npm scripts AND the workflow. Change all three together or decryption silently fails on deploy.
+### 7. WebCrypto parameters must match across encrypt + decrypt
+`PBKDF2_ITERATIONS = 600_000`, `SALT_BYTES = 16`, `IV_BYTES = 12`, `AES-GCM-256` are duplicated in `src/utils/crypto.ts` (browser) and `scripts/encrypt-data.mjs` (Node). Change one without the other and every existing `.json.enc` becomes undecryptable. Bump the `v` field in the blob format if you ever need to do this — both sides reject mismatched versions.
 
-### 8. Don't commit data.json (plaintext)
-It's in `.gitignore`. Stick to `data.json.enc`.
+### 8. Don't commit data.json (plaintext, includes plaintext passwords)
+It's in `.gitignore`. The committed artifacts are `data/index.json` (public) + `data/colleagues/*.json.enc` (encrypted).
 
 ### 9. Vite base path mismatches
 If you rename the GH Pages repo or switch to a custom domain, update `base` in `vite.config.ts`.
@@ -309,8 +335,9 @@ The hold-to-pause pointer handlers live on `.player` and bubble-receive every to
 | Tweak crossfade | `FADE_MS` in `src/utils/constants.ts` |
 | Change slide gradient | `bg-*` CSS classes near top of `src/styles/global.css` |
 | Modify export | `handleExport()` in `src/components/admin/Admin.tsx` |
-| Touch the password flow | `src/components/landing/PasswordModal.tsx` + `sha256()` in `src/utils/index.ts` |
-| Change deploy / data flow | `.github/workflows/deploy.yml` + `useDataJsonLoader.ts` |
+| Touch the password flow | `src/components/landing/PasswordModal.tsx` + `decryptJson()` in `src/utils/crypto.ts` |
+| Change the encrypt format | `src/utils/crypto.ts` AND `scripts/encrypt-data.mjs` together — they MUST agree |
+| Change deploy / data flow | `.github/workflows/deploy.yml` + `useDataJsonLoader.ts` + `scripts/encrypt-data.mjs` |
 | Tweak spirit-animal slide visuals | `src/components/slides/SpiritAnimalSlideView.tsx` + `.keepsake-*` / `.spirit-section-*` rules in `global.css` |
 | Tweak soundtrack slide visuals | `src/components/slides/SoundtrackSlideView.tsx` + `.keepsake-*` / `.keepsake-track-*` rules in `global.css` |
 | Tweak the soundtrack list logic | `getSoundtrack()` / `getFeaturedSoundtrack()` in `src/utils/wrapped.ts` (dedupe, cap) |
@@ -329,21 +356,20 @@ npm run dev          # localhost:5173
 npm run build        # production bundle into dist/
 npm run preview      # serve dist/ locally
 npm run typecheck    # tsc -b --noEmit
-npm run encrypt-data # data.json → data.json.enc (prompts for passphrase)
-npm run decrypt-data # data.json.enc → data.json (sanity-check)
+npm run encrypt-data # data.json → data/index.json + data/colleagues/*.json.enc
 ```
 
 ## Don't break
 
-- The password gate (no plaintext passwords ever — only SHA-256 hashes)
-- The encrypted-blob deploy invariant (`data.json` gitignored, only `data.json.enc` committed)
+- The decrypt-to-unlock gate (no `passwordHash` field anymore — gating IS the AES-GCM auth-tag check; if you bring back a hash field, also bring back the bypass it represents)
+- The encrypted-blob deploy invariant (`data.json` gitignored — contains plaintext passwords; only `data/index.json` + `data/colleagues/*.json.enc` are committed)
 - Auto-save on every edit (don't introduce a manual "save" requirement)
 - The single global CSS file — visual consistency depends on it
 - The discriminated unions for `Slide` / `BgConfig` / `FragmentSource` / `MediaItem` — type narrowing depends on the discriminator field
 - The `:not()` content-layering rule — adding new full-bleed components requires updating the exclusion list
 - The legacy-finale → `[spirit-animal, soundtrack]` expansion in `migrateColleague()` — removing it would orphan any legacy decks still carrying `'orb-finale'` or `'wrapped-finale'` slides
 - `cleanColleagueForExport()` must include any new colleague-level fields; otherwise they vanish on export
-- The `paused` vs `previewingMedia` split in `playerStore` — collapsing them back together would re-introduce the regression where opening a mosaic photo cuts the song mid-bar. Hold-to-pause must keep killing audio; mosaic preview must not.
-- `useAudioEngine` watches `paused` only (not `previewingMedia`) — preserve that asymmetry.
+- The three-way `paused` / `pausedByVisibility` / `previewingMedia` split in `playerStore` — collapsing them back together would re-introduce the regression where opening a mosaic photo cuts the song mid-bar, OR break the hold-to-pause-survives-tab-return invariant. Hold + visibility both halt audio; mosaic preview does not.
+- `useAudioEngine` is fed `paused || pausedByVisibility` (NOT `previewingMedia`) — preserve that asymmetry.
 - Hold-to-pause's nav-zone click suppression — if you remove `suppressClickRef`, releasing a hold will navigate the deck.
 - `CLAUDE.md` must stay at project root (Claude Code loads it from there). Other docs go in `docs/`.

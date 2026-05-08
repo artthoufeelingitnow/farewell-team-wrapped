@@ -20,7 +20,7 @@ export function Admin() {
   const selected = colleagues.find((c) => c.id === selectedId) ?? null;
 
   const handleAddColleague = () => {
-    const newCol = { id: uid(), name: '', passwordHash: '', slides: [] };
+    const newCol = { id: uid(), name: '', slides: [] };
     addColleague(newCol);
     setSelectedId(newCol.id);
   };
@@ -33,6 +33,15 @@ export function Admin() {
   };
 
   const handleExport = () => {
+    const missingPw = colleagues.filter((c) => c.slides.length > 0 && !c.password);
+    if (missingPw.length > 0) {
+      const names = missingPw.map((c) => c.name || c.id).join(', ');
+      if (!confirm(
+        `${missingPw.length} colleague(s) have no password and won't be encrypted: ${names}.\n\nExport anyway?`,
+      )) {
+        return;
+      }
+    }
     const cleanData = {
       meta: data.meta,
       colleagues: colleagues.map(cleanColleagueForExport),
@@ -44,7 +53,7 @@ export function Admin() {
     a.download = 'data.json';
     a.click();
     URL.revokeObjectURL(url);
-    showToast('Exported data.json — drop it next to dist/index.html');
+    showToast('Exported data.json — run `npm run encrypt-data` next');
   };
 
   return (

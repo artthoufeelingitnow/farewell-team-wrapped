@@ -24,14 +24,6 @@ export function uid(): string {
   return Math.random().toString(36).slice(2, 10);
 }
 
-export async function sha256(text: string): Promise<string> {
-  const enc = new TextEncoder().encode(text);
-  const buf = await crypto.subtle.digest('SHA-256', enc);
-  return Array.from(new Uint8Array(buf))
-    .map((b) => b.toString(16).padStart(2, '0'))
-    .join('');
-}
-
 export function readFileAsDataURL(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const r = new FileReader();
@@ -137,9 +129,12 @@ export function cleanColleagueForExport(c: Colleague): Colleague {
   const out: Colleague = {
     id: c.id,
     name: c.name,
-    passwordHash: c.passwordHash,
     slides: (c.slides || []).map(stripTransientFields),
   };
+  // The plaintext password is the AES-GCM key used by `npm run encrypt-data`.
+  // It belongs in the gitignored source-of-truth `data.json`, NOT in any
+  // committed artifact — the encrypt step strips it before writing index.json.
+  if (c.password) out.password = c.password;
   if (c.category) out.category = c.category;
   if (c.hidden) out.hidden = true;
   return out;
@@ -382,10 +377,13 @@ function migrateColleague(c: Colleague): Colleague {
   const out: Colleague = {
     id: c.id,
     name: c.name,
-    passwordHash: c.passwordHash,
     slides: outSlides,
     category,
   };
+  // Plaintext password (admin-side source-of-truth). Legacy data only had
+  // `passwordHash`, which is no longer used — admin will display a "needs
+  // password" warning until the user re-enters it.
+  if (typeof raw.password === 'string' && raw.password) out.password = raw.password;
   if (raw.hidden === true) out.hidden = true;
   return out;
 }

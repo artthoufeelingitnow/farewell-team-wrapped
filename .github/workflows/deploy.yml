@@ -26,19 +26,12 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run build
-      - name: Decrypt and inject data.json
-        if: hashFiles('data.json.enc') != ''
-        env:
-          DATA_PASSPHRASE: ${{ secrets.DATA_PASSPHRASE }}
+      - name: Copy encrypted data tree into dist/
+        if: hashFiles('data/index.json') != ''
         run: |
-          if [ -z "$DATA_PASSPHRASE" ]; then
-            echo "::error::data.json.enc exists but DATA_PASSPHRASE secret is not set"
-            exit 1
-          fi
-          openssl enc -d -aes-256-cbc -pbkdf2 -iter 600000 \
-            -in data.json.enc -out dist/data.json \
-            -pass env:DATA_PASSPHRASE
-          echo "Decrypted data.json ($(wc -c < dist/data.json) bytes)"
+          mkdir -p dist/data
+          cp -r data/. dist/data/
+          echo "Copied $(find dist/data -type f | wc -l) files into dist/data/"
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
