@@ -23,6 +23,7 @@ export function Player() {
   const paused = usePlayerStore((s) => s.paused);
   const previewingMedia = usePlayerStore((s) => s.previewingMedia);
   const pausedByVisibility = usePlayerStore((s) => s.pausedByVisibility);
+  const memeVideoDurationMs = usePlayerStore((s) => s.memeVideoDurationMs);
   const setSlideIndex = usePlayerStore((s) => s.setSlideIndex);
   const nextSlideAction = usePlayerStore((s) => s.nextSlide);
   const prevSlideAction = usePlayerStore((s) => s.prevSlide);
@@ -91,7 +92,16 @@ export function Player() {
       if (fillRef.current) fillRef.current.style.width = '100%';
       return;
     }
-    const duration = getSlideDuration(slide);
+    // Meme slides: match the auto-advance to the video's intrinsic length so
+    // the progress bar tracks the video. The `min` floor (8s) lets short memes
+    // loop at least once instead of vanishing before the punchline lands; the
+    // 800ms grace covers the gap between video.ended and the next slide's
+    // first paint. An explicit `slide.songDuration` override still wins.
+    const memeDur =
+      slide.type === 'meme' && memeVideoDurationMs && !slide.songDuration
+        ? Math.max(memeVideoDurationMs, 8000) + 800
+        : null;
+    const duration = memeDur ?? getSlideDuration(slide);
     // Anchor the start so `Date.now() - startedAt === elapsedRef.current` at
     // tick zero — i.e. resume where the last interval left off.
     const startedAt = Date.now() - elapsedRef.current;
@@ -106,7 +116,7 @@ export function Player() {
       }
     }, 50);
     return () => clearInterval(timer);
-  }, [slideIndex, slide, colleague, isLast, nextSlideAction, halted, previewingMedia]);
+  }, [slideIndex, slide, colleague, isLast, nextSlideAction, halted, previewingMedia, memeVideoDurationMs]);
 
   // Keyboard shortcuts. Disabled while halted OR while a mosaic preview is
   // open — the lightbox owns Escape (capture-phase listener inside it) and

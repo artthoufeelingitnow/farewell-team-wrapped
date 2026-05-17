@@ -19,6 +19,7 @@ export type SlideType =
   | 'mosaic'
   | 'spirit-animal'
   | 'soundtrack'
+  | 'meme'
   | 'signoff';
 
 export interface PodiumItem {
@@ -239,6 +240,21 @@ export interface SoundtrackSlide extends SlideBase {
   tagline?: string;
 }
 
+/** Single-video keepsake-shell slide for a TikTok / IG meme. Same card frame
+ *  as the soundtrack slide, no title. Video plays with audio (the meme IS the
+ *  punchline) — the deck's bg song fades out for the duration of this slide
+ *  via the audio engine's "no songUrl → fade current to 0" path. */
+export interface MemeSlide extends SlideBase {
+  type: 'meme';
+  /** Small-caps eyebrow at the top of the card. Default e.g. "the meme that..." */
+  eyebrow?: string;
+  /** Hosted .mp4/.webm URL (download TikTok/IG, convert to H.264 .mp4, drop
+   *  into public/videos/). Same hosting flow as mosaic videos. */
+  videoUrl?: string;
+  /** Optional italic tagline rendered at the bottom of the card. */
+  tagline?: string;
+}
+
 export type Slide =
   | IntroSlide
   | StatSlide
@@ -249,6 +265,7 @@ export type Slide =
   | MosaicSlide
   | SpiritAnimalSlide
   | SoundtrackSlide
+  | MemeSlide
   | SignoffSlide;
 
 /** Landing-page grouping. Trainers vs YFA get rendered as separate sections. */

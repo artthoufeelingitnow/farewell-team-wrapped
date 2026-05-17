@@ -111,3 +111,50 @@ export async function saveCardAsPng(
   link.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
+
+/** Fetch a hosted video and hand it to the OS share sheet so iOS / Android
+ *  users can "Save Video" / "Save to Gallery" into their camera roll. Desktop
+ *  (no Web Share with files) falls back to a download link. Same shape as
+ *  saveCardAsPng but skips the html-to-image canvas pipeline since the video
+ *  file is already a shareable asset.
+ *
+ *  Reasonable file sizes only — the whole video is pulled into memory as a
+ *  blob. Meme clips at <10 MB are fine; multi-hundred-MB files would OOM
+ *  on lower-end phones. */
+export async function saveVideoToGallery(
+  videoUrl: string,
+  colleagueName: string,
+  kind: string,
+): Promise<void> {
+  const response = await fetch(videoUrl);
+  if (!response.ok) throw new Error(`Failed to fetch video (${response.status})`);
+  const blob = await response.blob();
+  // Default to mp4 — that's the only format the hosting flow produces, and
+  // some servers don't set a useful Content-Type.
+  const mimeType = blob.type || 'video/mp4';
+  const ext = mimeType.includes('webm') ? 'webm' : 'mp4';
+  const filename = `${slugify(kind)}-${slugify(colleagueName)}.${ext}`;
+  const file = new File([blob], filename, { type: mimeType });
+
+  const nav = navigator as Navigator & {
+    canShare?: (data: ShareData & { files?: File[] }) => boolean;
+    share?: (data: ShareData & { files?: File[] }) => Promise<void>;
+  };
+  if (nav.canShare && nav.share && nav.canShare({ files: [file] })) {
+    try {
+      await nav.share({ files: [file], title: filename });
+      return;
+    } catch (err) {
+      // User cancelled the share sheet — that's not a failure.
+      if (err instanceof DOMException && err.name === 'AbortError') return;
+      // Otherwise fall through to the download path so the user still gets the file.
+    }
+  }
+
+  const objUrl = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.download = filename;
+  link.href = objUrl;
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(objUrl), 1000);
+}

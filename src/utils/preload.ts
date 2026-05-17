@@ -35,6 +35,9 @@ function collectVideoUrls(slide: Slide): string[] {
       if (slide.left?.media?.kind === 'video') out.push(...collectMediaUrls(slide.left.media));
       if (slide.right?.media?.kind === 'video') out.push(...collectMediaUrls(slide.right.media));
       break;
+    case 'meme':
+      if (slide.videoUrl && !slide.videoUrl.startsWith('data:')) out.push(slide.videoUrl);
+      break;
   }
   return out;
 }

@@ -1,10 +1,16 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useAppStore } from '../../store/appStore';
 import { usePlayerStore } from '../../store/playerStore';
 import type { Colleague } from '../../types';
 import { PasswordModal } from './PasswordModal';
 import { preloadColleagueAssets } from '../../utils/preload';
 import { useHashRoute } from '../../hooks/useHashRoute';
+
+/** Sequence to type from the landing page to jump to admin. Buffer is per-
+ *  keystroke; idle for >ADMIN_BUFFER_RESET_MS resets it. Visitors won't trip
+ *  it incidentally — five specific keys in a row is a deliberate act. */
+const ADMIN_SECRET = 'admin';
+const ADMIN_BUFFER_RESET_MS = 1500;
 
 export function Landing() {
   const data = useAppStore((s) => s.data);
@@ -15,6 +21,49 @@ export function Landing() {
   const [route, navigate] = useHashRoute();
 
   const [pwTarget, setPwTarget] = useState<Colleague | null>(null);
+
+  // Hidden admin entry: type "admin" on the landing page. Buffer accumulates
+  // matching characters in order; any mismatch resets it, and idle >1.5s
+  // resets it too. Skips when an input/textarea is focused so it doesn't fire
+  // while someone's typing a password in the modal.
+  const adminBufferRef = useRef('');
+  const adminIdleTimerRef = useRef<number | null>(null);
+  useEffect(() => {
+    const resetBuffer = () => {
+      adminBufferRef.current = '';
+      if (adminIdleTimerRef.current !== null) {
+        window.clearTimeout(adminIdleTimerRef.current);
+        adminIdleTimerRef.current = null;
+      }
+    };
+    const onKey = (e: KeyboardEvent) => {
+      // Don't intercept keystrokes meant for a focused input.
+      const t = e.target as HTMLElement | null;
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+      // Only single-character keys; ignore modifiers, arrows, etc.
+      if (e.key.length !== 1) return;
+      const expectedChar = ADMIN_SECRET[adminBufferRef.current.length];
+      if (e.key.toLowerCase() === expectedChar) {
+        adminBufferRef.current += expectedChar;
+        if (adminBufferRef.current === ADMIN_SECRET) {
+          resetBuffer();
+          window.location.hash = '#admin';
+          return;
+        }
+        if (adminIdleTimerRef.current !== null) window.clearTimeout(adminIdleTimerRef.current);
+        adminIdleTimerRef.current = window.setTimeout(resetBuffer, ADMIN_BUFFER_RESET_MS);
+      } else {
+        // Wrong char — but if it's the FIRST char of the secret, start fresh
+        // from this keystroke (so "aadmin" still works after the false start).
+        adminBufferRef.current = e.key.toLowerCase() === ADMIN_SECRET[0] ? ADMIN_SECRET[0] : '';
+      }
+    };
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      resetBuffer();
+    };
+  }, []);
 
   // In production, the index file populates colleague shells with empty
   // slide arrays — slides arrive lazily after decrypt. So filtering by
@@ -124,7 +173,6 @@ export function Landing() {
         )}
 
         <div className="landing-footer">made with care · for the team</div>
-        <a href="#admin" className="admin-link">admin</a>
       </div>
 
       {pwTarget && (

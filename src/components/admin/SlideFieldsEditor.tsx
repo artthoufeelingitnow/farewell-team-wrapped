@@ -9,6 +9,7 @@ import type {
   SpiritAnimalSlide,
   SpiritAnimalSection,
   SoundtrackSlide,
+  MemeSlide,
   TitleFontKind,
   Colleague,
 } from '../../types';
@@ -66,6 +67,8 @@ export function SlideFieldsEditor({ slide, colleague, onPatch }: Props) {
       return <SpiritAnimalFields slide={slide} onPatch={onPatch} />;
     case 'soundtrack':
       return <SoundtrackFields slide={slide} colleague={colleague} onPatch={onPatch} />;
+    case 'meme':
+      return <MemeFields slide={slide} onPatch={onPatch} />;
     case 'signoff':
       return (
         <div className="slide-fields">
@@ -513,6 +516,96 @@ function SoundtrackFields({
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+function MemeFields({
+  slide,
+  onPatch,
+}: {
+  slide: MemeSlide;
+  onPatch: (patch: Partial<Slide>) => void;
+}) {
+  const handleVideoUrl = () => {
+    const url = prompt(
+      'Paste video URL (e.g. https://artthoufeelingitnow.github.io/farewell-team-wrapped/videos/meme.mp4):',
+      slide.videoUrl ?? '',
+    );
+    if (url === null) return;
+    const trimmed = url.trim();
+    onPatch({ videoUrl: trimmed || undefined });
+  };
+
+  const handleClearVideo = () => onPatch({ videoUrl: undefined });
+
+  return (
+    <div className="slide-fields">
+      <Field
+        label="Eyebrow (small caps)"
+        value={slide.eyebrow ?? ''}
+        placeholder="the meme that lived rent-free"
+        onChange={(v) => onPatch({ eyebrow: v })}
+        full
+      />
+
+      <div className="full">
+        <label className="field-label">Video</label>
+        {slide.videoUrl ? (
+          <div style={{ position: 'relative', marginBottom: 8 }}>
+            <video
+              src={slide.videoUrl}
+              autoPlay
+              muted
+              loop
+              playsInline
+              style={{
+                width: '100%', maxHeight: 220, borderRadius: 8,
+                background: '#000', objectFit: 'contain', display: 'block',
+              }}
+            />
+            <button
+              className="icon-btn danger"
+              style={{ position: 'absolute', top: 6, right: 6, width: 22, height: 22, fontSize: 12 }}
+              onClick={handleClearVideo}
+              title="Remove video"
+            >
+              ×
+            </button>
+          </div>
+        ) : (
+          <div
+            style={{
+              fontSize: 12,
+              color: 'rgba(255,255,255,0.45)',
+              fontStyle: 'italic',
+              marginBottom: 8,
+            }}
+          >
+            No video yet — paste a hosted MP4 URL.
+          </div>
+        )}
+        <button
+          type="button"
+          className="photo-upload"
+          style={{ width: '100%', fontFamily: 'inherit' }}
+          onClick={handleVideoUrl}
+        >
+          {slide.videoUrl ? '🔁 Change video URL' : '🎥 Paste video URL'}
+        </button>
+        <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)', marginTop: 6 }}>
+          Download the TikTok/IG, convert to MP4 (H.264), drop into
+          public/videos/, commit, then paste the GitHub Pages URL.
+        </div>
+      </div>
+
+      <Field
+        label="Tagline (italic, at bottom)"
+        value={slide.tagline ?? ''}
+        placeholder="e.g. iykyk"
+        onChange={(v) => onPatch({ tagline: v })}
+        full
+      />
     </div>
   );
 }

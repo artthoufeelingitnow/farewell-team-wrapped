@@ -105,6 +105,8 @@ export function makeDefaultSlide(type: SlideType, name: string): Slide {
       return { type, bg };
     case 'soundtrack':
       return { type, bg };
+    case 'meme':
+      return { type, bg };
     case 'signoff':
       return { type, bg, eyebrow: 'Until next time', title: 'Thank you', sub: '' };
   }
@@ -145,6 +147,13 @@ export function getSlideDuration(slide: Slide | undefined): number {
   // "Save" before auto-advance.
   if (slide?.type === 'spirit-animal' || slide?.type === 'soundtrack') {
     return slide.songDuration ?? 30000;
+  }
+  // Meme slides have their duration driven dynamically from the video's
+  // intrinsic length (Player reads `memeVideoDurationMs` from playerStore).
+  // This is the fallback used before metadata loads, or if the video element
+  // never reports a duration.
+  if (slide?.type === 'meme') {
+    return slide.songDuration ?? 15000;
   }
   return slide?.songDuration ?? DEFAULT_SLIDE_DURATION;
 }

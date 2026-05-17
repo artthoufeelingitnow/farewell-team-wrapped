@@ -28,6 +28,7 @@ export const SLIDE_TYPES: Record<SlideType, SlideTypeMeta> = {
   mosaic: { label: 'Photos', emoji: '🧩', bg: 'bg-teal' },
   'spirit-animal': { label: 'Spirit animal', emoji: '🐾', bg: 'bg-dark' },
   soundtrack: { label: 'Soundtrack', emoji: '🎵', bg: 'bg-dark' },
+  meme: { label: 'Meme video', emoji: '😂', bg: 'bg-dark' },
   signoff: { label: 'Sign off', emoji: '🫶', bg: 'bg-blue' },
 };
 

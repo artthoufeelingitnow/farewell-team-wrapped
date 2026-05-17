@@ -10,6 +10,7 @@ import { LetterSlideView } from './LetterSlideView';
 import { MosaicSlideView } from './MosaicSlideView';
 import { SpiritAnimalSlideView } from './SpiritAnimalSlideView';
 import { SoundtrackSlideView } from './SoundtrackSlideView';
+import { MemeSlideView } from './MemeSlideView';
 import { SignoffSlideView } from './SignoffSlideView';
 
 interface Props {
@@ -42,6 +43,7 @@ function SlideContent({ slide, colleague, onReplay, onClose }: Props) {
     case 'mosaic': return <MosaicSlideView slide={slide} />;
     case 'spirit-animal': return <SpiritAnimalSlideView slide={slide} colleague={colleague} />;
     case 'soundtrack': return <SoundtrackSlideView slide={slide} colleague={colleague} />;
+    case 'meme': return <MemeSlideView slide={slide} colleague={colleague} />;
     case 'signoff': return <SignoffSlideView slide={slide} onReplay={onReplay} onClose={onClose} />;
   }
 }
