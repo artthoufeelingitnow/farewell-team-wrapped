@@ -82,6 +82,7 @@ export function MosaicSlideView({ slide }: { slide: MosaicSlide }) {
   return (
     <>
       <div className="slide-eyebrow">{slide.eyebrow || 'Memories'}</div>
+      <div className="mosaic-hint">tap a photo to expand 👇</div>
       <h2>{slide.title || ''}</h2>
       <div className="photo-mosaic">
         {padded.slice(0, 9).map((item, i) => (

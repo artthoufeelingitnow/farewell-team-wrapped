@@ -2369,6 +2369,25 @@
     overflow: hidden;
     text-overflow: ellipsis;
   }
+  /* Small affordance under the mosaic grid telling viewers the tiles are
+     interactive. Gently pulses so it's noticed without competing with the
+     photos for attention. */
+  .mosaic-hint {
+    text-align: center;
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.55);
+    margin: 6px 0 4px;
+    letter-spacing: 0.3px;
+    animation: mosaic-hint-pulse 2.4s ease-in-out infinite;
+  }
+  .slide.text-dark .mosaic-hint {
+    color: rgba(0, 0, 0, 0.5);
+  }
+  @keyframes mosaic-hint-pulse {
+    0%, 100% { opacity: 0.55; }
+    50%      { opacity: 1; }
+  }
+
   /* Up/down reorder buttons for featured songs. Sit at the right edge of each
      featured-row, only rendered on the picked-set; the unfeatured rows below
      skip this column entirely. */

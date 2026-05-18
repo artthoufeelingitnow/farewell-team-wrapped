@@ -251,12 +251,14 @@ export function Player() {
 
       {/* The keepsake slides have their own track list / spirit animal hero,
           so the now-playing bubble would just clutter the captured PNG and the
-          live view. Audio still plays — that's wired to slide.songUrl in the
-          audio engine, independent of this UI. */}
+          live view. The letter slide hides it too — on phone widths the bar
+          overlaps the body text. Audio still plays in all cases; this is just
+          visual suppression. */}
       {slide.songUrl &&
         slide.songName &&
         slide.type !== 'spirit-animal' &&
-        slide.type !== 'soundtrack' && (
+        slide.type !== 'soundtrack' &&
+        slide.type !== 'letter' && (
           <div className="now-playing">
             {slide.songArt && <img src={slide.songArt} alt="" />}
             <div className="np-text">
