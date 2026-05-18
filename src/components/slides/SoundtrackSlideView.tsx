@@ -11,7 +11,7 @@ interface Props {
 type SaveState = 'idle' | 'saving' | 'saved' | 'error';
 
 const SAVE_LABEL: Record<SaveState, string> = {
-  idle: 'Save to gallery',
+  idle: '⬇ Save to gallery',
   saving: 'Saving…',
   saved: 'Saved!',
   error: "Couldn't save — try again?",

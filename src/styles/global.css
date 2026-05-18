@@ -2369,3 +2369,47 @@
     overflow: hidden;
     text-overflow: ellipsis;
   }
+  /* Up/down reorder buttons for featured songs. Sit at the right edge of each
+     featured-row, only rendered on the picked-set; the unfeatured rows below
+     skip this column entirely. */
+  .wrapped-track-row-reorder {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    flex-shrink: 0;
+    margin-left: auto;
+  }
+  .wrapped-track-row-reorder button {
+    width: 22px;
+    height: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 4px;
+    color: rgba(255, 255, 255, 0.75);
+    font-size: 11px;
+    line-height: 1;
+    padding: 0;
+    cursor: pointer;
+    transition: background 0.12s ease, color 0.12s ease;
+  }
+  .wrapped-track-row-reorder button:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.18);
+    color: #fff;
+  }
+  .wrapped-track-row-reorder button:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+  }
+  /* Small section label between the featured (ordered) and unfeatured (add-more)
+     halves of the picker. Only renders when both halves are non-empty. */
+  .wrapped-track-divider {
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: rgba(255, 255, 255, 0.35);
+    padding: 6px 8px 2px;
+  }

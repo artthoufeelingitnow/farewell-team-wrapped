@@ -429,9 +429,31 @@ function SoundtrackFields({
     onPatch({ featuredTrackKeys: next });
   };
 
+  // Swap the song at `key` with its neighbor in the given direction. Promotes
+  // an auto-pick into a stored order (same way `toggle` does) the moment the
+  // user nudges an item.
+  const moveBy = (key: string, delta: -1 | 1) => {
+    const idx = featured.indexOf(key);
+    if (idx === -1) return;
+    const target = idx + delta;
+    if (target < 0 || target >= featured.length) return;
+    const next = [...featured];
+    [next[idx], next[target]] = [next[target], next[idx]];
+    onPatch({ featuredTrackKeys: next });
+  };
+
   const resetToAuto = () => onPatch({ featuredTrackKeys: undefined });
 
   const isAuto = slide.featuredTrackKeys === undefined;
+
+  // Map for key → track lookup. Featured rows render in `featured` order
+  // (user-chosen sequence), unfeatured rows fall back to deck order via
+  // `allSongs`.
+  const trackByKey = new Map(allSongs.map((t) => [t.key, t]));
+  const featuredTracks = featured
+    .map((k) => trackByKey.get(k))
+    .filter((t): t is (typeof allSongs)[number] => !!t);
+  const unfeaturedTracks = allSongs.filter((t) => !featuredSet.has(t.key));
 
   return (
     <div className="slide-fields">
@@ -487,17 +509,53 @@ function SoundtrackFields({
             )}
           </div>
           <div className="wrapped-track-picker">
-            {allSongs.map((t) => {
-              const checked = featuredSet.has(t.key);
-              const disabled = !checked && isAtCap;
+            {featuredTracks.map((t, i) => (
+              <label key={t.key} className="wrapped-track-row is-checked">
+                <input
+                  type="checkbox"
+                  checked
+                  onChange={() => toggle(t.key)}
+                />
+                {t.art ? (
+                  <img src={t.art} alt="" className="wrapped-track-row-art" />
+                ) : (
+                  <div className="wrapped-track-row-art wrapped-track-row-art-empty" />
+                )}
+                <div className="wrapped-track-row-meta">
+                  <div className="wrapped-track-row-name">{t.name}</div>
+                  {t.artist && <div className="wrapped-track-row-artist">{t.artist}</div>}
+                </div>
+                <div className="wrapped-track-row-reorder">
+                  <button
+                    type="button"
+                    disabled={i === 0}
+                    onClick={(e) => { e.stopPropagation(); moveBy(t.key, -1); }}
+                    title="Move up"
+                  >↑</button>
+                  <button
+                    type="button"
+                    disabled={i === featuredTracks.length - 1}
+                    onClick={(e) => { e.stopPropagation(); moveBy(t.key, +1); }}
+                    title="Move down"
+                  >↓</button>
+                </div>
+              </label>
+            ))}
+
+            {featuredTracks.length > 0 && unfeaturedTracks.length > 0 && (
+              <div className="wrapped-track-divider">add more</div>
+            )}
+
+            {unfeaturedTracks.map((t) => {
+              const disabled = isAtCap;
               return (
                 <label
                   key={t.key}
-                  className={`wrapped-track-row${checked ? ' is-checked' : ''}${disabled ? ' is-disabled' : ''}`}
+                  className={`wrapped-track-row${disabled ? ' is-disabled' : ''}`}
                 >
                   <input
                     type="checkbox"
-                    checked={checked}
+                    checked={false}
                     disabled={disabled}
                     onChange={() => toggle(t.key)}
                   />
@@ -544,7 +602,7 @@ function MemeFields({
       <Field
         label="Eyebrow (small caps)"
         value={slide.eyebrow ?? ''}
-        placeholder="the meme that lived rent-free"
+        placeholder="before we continue, here's a meme..."
         onChange={(v) => onPatch({ eyebrow: v })}
         full
       />

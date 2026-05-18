@@ -32,10 +32,11 @@ export function getSoundtrack(colleague: Colleague): SoundtrackTrack[] {
 }
 
 /** Apply the wrapped-finale's curation to the full soundtrack list:
- *  - `featuredKeys === undefined` → auto-pick first MAX_FEATURED_TRACKS
+ *  - `featuredKeys === undefined` → auto-pick first MAX_FEATURED_TRACKS in deck order
  *  - `featuredKeys === []` → user explicitly emptied the list (returns [])
- *  - non-empty → keep only those keys, capped at MAX_FEATURED_TRACKS,
- *    in the deck's natural order
+ *  - non-empty → render in the order specified by `featuredKeys`, capped at
+ *    MAX_FEATURED_TRACKS. Orphan keys (songs renamed/removed elsewhere) are
+ *    silently skipped so the slide stays in sync with the live song list.
  */
 export function getFeaturedSoundtrack(
   colleague: Colleague,
@@ -45,8 +46,14 @@ export function getFeaturedSoundtrack(
   if (featuredKeys === undefined) {
     return all.slice(0, MAX_FEATURED_TRACKS);
   }
-  const set = new Set(featuredKeys);
-  return all.filter((t) => set.has(t.key)).slice(0, MAX_FEATURED_TRACKS);
+  const byKey = new Map(all.map((t) => [t.key, t]));
+  const out: SoundtrackTrack[] = [];
+  for (const k of featuredKeys) {
+    const t = byKey.get(k);
+    if (t) out.push(t);
+    if (out.length >= MAX_FEATURED_TRACKS) break;
+  }
+  return out;
 }
 
 function slugify(name: string): string {

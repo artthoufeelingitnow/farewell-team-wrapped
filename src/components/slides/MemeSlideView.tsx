@@ -52,7 +52,7 @@ export function MemeSlideView({ slide, colleague }: { slide: MemeSlide; colleagu
     }
   }, [paused, pausedByVisibility]);
 
-  const eyebrow = slide.eyebrow || 'the meme that lived rent-free';
+  const eyebrow = slide.eyebrow || 'before we continue, here\'s a meme...';
 
   const handleLoadedMetadata = () => {
     const v = videoRef.current;
