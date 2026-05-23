@@ -122,7 +122,7 @@ export function Landing() {
           <h1>{data.meta.title || 'For You'}</h1>
           <p>
             {data.meta.subtitle ||
-              'A little something I made for each of you. Find your name, enter the password I sent you.'}
+              "Here's a little something I made for each of you! Find your name and enter your password."}
           </p>
         </div>
 
@@ -154,25 +154,19 @@ export function Landing() {
               disabled={trainers.length === 0}
               onClick={() => navigate('trainer')}
             >
-              <span className="category-bubble-label">Trainer</span>
-              <span className="category-bubble-count">
-                {trainers.length} {trainers.length === 1 ? 'person' : 'people'}
-              </span>
+              <span className="category-bubble-label">Trainers</span>
             </button>
             <button
               className="category-bubble"
               disabled={yfas.length === 0}
               onClick={() => navigate('yfa')}
             >
-              <span className="category-bubble-label">YFA</span>
-              <span className="category-bubble-count">
-                {yfas.length} {yfas.length === 1 ? 'person' : 'people'}
-              </span>
+              <span className="category-bubble-label">YFAs</span>
             </button>
           </div>
         )}
 
-        <div className="landing-footer">made with care · for the team</div>
+        <div className="landing-footer">by yours truly, ME</div>
       </div>
 
       {pwTarget && (
