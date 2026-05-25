@@ -1,10 +1,24 @@
 import { useEffect, useRef, useState } from 'react';
 import { useAppStore } from '../../store/appStore';
 import { usePlayerStore } from '../../store/playerStore';
-import type { Colleague } from '../../types';
+import type { Colleague, LavaBg } from '../../types';
 import { PasswordModal } from './PasswordModal';
 import { preloadColleagueAssets } from '../../utils/preload';
 import { useHashRoute } from '../../hooks/useHashRoute';
+import { SlideBackground } from '../slides/SlideBackground';
+
+const LANDING_LAVA_BG: LavaBg = {
+  kind: 'lava',
+  baseColor: '#1A0A2E',
+  blobs: [
+    { color: '#610020' },
+    { color: '#00423E' },
+    { color: '#4D3200' },
+  ],
+  speed: 'fast',
+  blur: 35,
+  textColor: 'light',
+};
 
 /** Sequence to type from the landing page to jump to admin. Buffer is per-
  *  keystroke; idle for >ADMIN_BUFFER_RESET_MS resets it. Visitors won't trip
@@ -118,6 +132,7 @@ export function Landing() {
   return (
     <>
       <div className="landing">
+        <SlideBackground config={LANDING_LAVA_BG} />
         <div className="landing-header">
           <h1>{data.meta.title || 'For You'}</h1>
           <p>

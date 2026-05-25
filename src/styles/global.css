@@ -20,8 +20,12 @@
     align-items: center;
     justify-content: center;
     padding: 40px 20px;
-    background: radial-gradient(ellipse at center, #2a1845 0%, #0a0014 70%);
     position: relative;
+    overflow: hidden;
+  }
+  .landing > *:not(.slide-bg) {
+    position: relative;
+    z-index: 1;
   }
   .landing-header {
     text-align: center;
@@ -119,9 +123,11 @@
     max-width: 320px;
     aspect-ratio: 1 / 1;
     border-radius: 50%;
-    background: rgba(255,255,255,0.06);
-    border: 1px solid rgba(255,255,255,0.18);
-    backdrop-filter: blur(10px);
+    background: rgba(20, 10, 30, 0.45);
+    border: 1.5px solid rgba(255,255,255,0.55);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.35);
     cursor: pointer;
     color: #fff;
     display: flex;
@@ -135,9 +141,10 @@
   }
   .category-bubble:nth-child(2) { animation-delay: -3s; }
   .category-bubble:hover:not(:disabled) {
-    background: rgba(255,255,255,0.14);
+    background: rgba(20, 10, 30, 0.6);
     transform: translateY(-6px) scale(1.04);
-    border-color: rgba(255,255,255,0.45);
+    border-color: rgba(255,255,255,0.85);
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
   }
   .category-bubble:disabled {
     opacity: 0.25;
