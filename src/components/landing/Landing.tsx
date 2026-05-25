@@ -9,7 +9,7 @@ import { SlideBackground } from '../slides/SlideBackground';
 
 const LANDING_LAVA_BG: LavaBg = {
   kind: 'lava',
-  baseColor: '#1A0A2E',
+  baseColor: '#000000',
   blobs: [
     { color: '#610020' },
     { color: '#00423E' },
