@@ -1133,6 +1133,46 @@
     50% { transform: scale(1.1); opacity: 0.8; }
   }
 
+  /* Volume hint — shown after password unlock, before the player opens. The
+     tap that dismisses it doubles as the user gesture that unblocks autoplay. */
+  #volume-hint-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.92);
+    backdrop-filter: blur(10px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 70;
+    cursor: pointer;
+    padding: 24px;
+    animation: fadeIn 0.25s ease;
+  }
+  .volume-hint-inner {
+    text-align: center;
+    color: #fff;
+    max-width: 360px;
+  }
+  .volume-hint-icon {
+    font-size: 80px;
+    margin-bottom: 20px;
+    animation: pulse 1.4s ease-in-out infinite;
+  }
+  .volume-hint-text {
+    font-family: var(--font-display);
+    font-size: 32px;
+    margin-bottom: 14px;
+    background: linear-gradient(90deg, #FF6B9D 0%, #FFC75F 50%, #4ECDC4 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  .volume-hint-sub {
+    font-size: 15px;
+    color: rgba(255,255,255,0.75);
+    line-height: 1.5;
+  }
+
   /* admin song picker */
   .song-picker {
     background: rgba(0,0,0,0.4);

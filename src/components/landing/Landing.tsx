@@ -35,6 +35,7 @@ export function Landing() {
   const [route, navigate] = useHashRoute();
 
   const [pwTarget, setPwTarget] = useState<Colleague | null>(null);
+  const [volumeHintFor, setVolumeHintFor] = useState<Colleague | null>(null);
 
   // Hidden admin entry: type "admin" on the landing page. Buffer accumulates
   // matching characters in order; any mismatch resets it, and idle >1.5s
@@ -121,12 +122,19 @@ export function Landing() {
   const handleUnlock = () => {
     if (!pwTarget) return;
     // After unlock, the colleague's slides are populated in the store. Re-read
-    // the latest version so preload sees them, then mark + open.
+    // the latest version so preload sees them, then mark + show the volume hint.
+    // The hint's tap doubles as the user gesture that unblocks audio autoplay.
     const latest = useAppStore.getState().data.colleagues.find((c) => c.id === pwTarget.id);
     if (latest) preloadColleagueAssets(latest);
     markUnlocked(pwTarget.id);
-    openPlayer(pwTarget.id);
+    setVolumeHintFor(pwTarget);
     setPwTarget(null);
+  };
+
+  const handleVolumeHintDismiss = () => {
+    if (!volumeHintFor) return;
+    openPlayer(volumeHintFor.id);
+    setVolumeHintFor(null);
   };
 
   return (
@@ -190,6 +198,18 @@ export function Landing() {
           onUnlock={handleUnlock}
           onCancel={() => setPwTarget(null)}
         />
+      )}
+
+      {volumeHintFor && (
+        <div id="volume-hint-overlay" onClick={handleVolumeHintDismiss}>
+          <div className="volume-hint-inner">
+            <div className="volume-hint-icon">🔊</div>
+            <div className="volume-hint-text">Turn your volume up!</div>
+            <div className="volume-hint-sub">
+              Make sure your audio is on, then tap anywhere to continue.
+            </div>
+          </div>
+        </div>
       )}
     </>
   );
