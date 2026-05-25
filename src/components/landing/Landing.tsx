@@ -16,7 +16,7 @@ const LANDING_LAVA_BG: LavaBg = {
     { color: '#4D3200' },
   ],
   speed: 'fast',
-  blur: 35,
+  blur: 85,
   textColor: 'light',
 };
 

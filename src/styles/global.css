@@ -27,6 +27,13 @@
     position: relative;
     z-index: 1;
   }
+  /* Pin the landing's lava layer to the viewport so blobs drift across the
+     whole screen instead of bunching at the top when .landing is taller than
+     100vh on mobile (its inner content can push past one viewport). */
+  .landing > .slide-bg {
+    position: fixed;
+    inset: 0;
+  }
   .landing-header {
     text-align: center;
     margin-bottom: 48px;
