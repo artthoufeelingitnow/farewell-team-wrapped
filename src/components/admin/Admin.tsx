@@ -119,7 +119,7 @@ export function Admin() {
                   e.target.value = '';
                 }}
               />
-              <button className="btn btn-sm btn-ghost" onClick={() => navigate('landing')}>
+              <button className="btn btn-sm btn-ghost" onClick={() => navigate({ kind: 'landing' })}>
                 View landing
               </button>
               <button className="btn btn-sm btn-danger" onClick={handleReset}>

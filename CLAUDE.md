@@ -2,7 +2,9 @@
 
 ## What this is
 
-A personal goodbye gift for colleagues at **Pathlight School (Digital Academy)**. Each colleague gets their own custom Spotify-Wrapped-style slide deck — gated behind a password they receive privately.
+A personal goodbye gift for colleagues at **Pathlight School (Digital Academy)**. Each colleague gets their own custom Spotify-Wrapped-style slide deck, reached via a **private per-person link** and gated behind a password they receive privately.
+
+**There is no public roster.** Nothing shipped to the web says who this was made for — not names, not ids, not a count. A colleague's name lives inside their own encrypted blob and only appears after their password decrypts it.
 
 The vibe: a heartfelt mini-memoir framed as a wrapped recap. Not a generic "thanks for everything" — each deck is custom-built per person.
 
@@ -25,9 +27,9 @@ farewell_wrapped/
 │   └── videos/             # hosted .mp4/.webm files for mosaic video media
 ├── docs/                   # design briefs (MEMORY_ORB_BRIEF.md, SPIRIT_ANIMAL_BRIEF.md)
 ├── data/                   # COMMITTED encrypted artifacts — produced by `npm run encrypt-data`
-│   ├── index.json          #   public: meta + colleague shells (no slides, no passwords)
+│   ├── index.json          #   public: meta ONLY. No names, no ids, no roster.
 │   └── colleagues/         #   per-colleague AES-GCM blobs, key = each colleague's plaintext password
-│       └── <id>.json.enc
+│       └── <id>.json.enc   #   payload = { name, category?, slides }
 ├── data.json               # gitignored. Admin source-of-truth (plaintext passwords on each colleague)
 ├── scripts/encrypt-data.mjs # data.json → data/index.json + data/colleagues/*.json.enc (Node WebCrypto)
 ├── CLAUDE.md               # ← you are here. MUST stay at root for tools to load it.
@@ -39,7 +41,7 @@ farewell_wrapped/
 │   ├── styles/global.css
 │   └── components/
 │       ├── Toast.tsx
-│       ├── landing/{Landing, PasswordModal}.tsx
+│       ├── landing/Unlock.tsx   # the entire public surface: password box + greeting
 │       ├── player/Player.tsx
 │       ├── slides/         # one view component per slide type + SlideRenderer + FragmentLayer + SlideBackground
 │       └── admin/          # Admin shell + Editor + SlidePreview + SlideStyleEditor + SlideFieldsEditor + SongPicker
@@ -52,16 +54,21 @@ farewell_wrapped/
 
 | Route | View | Who sees it |
 |---|---|---|
-| `#` (default) | **Landing** | Visitors — bubble grid of names |
+| `#/d/<id>` | **Unlock** (password box) | A colleague following their private link |
+| `#` (default) | **Unlock** ("you need your own link") | Anyone who found the bare URL |
 | `#admin` | **Admin tool** | Michael only — build/edit decks |
-| (in-app, when a colleague is selected) | **Player** | Visitors after password auth |
+| (in-app, once a deck is unlocked) | **Player** | Visitors after decrypt |
+
+`Route` is a discriminated union (`{kind:'landing'|'admin'|'deck'}`) in `useHashRoute.ts`; `parseHash` validates the deck id against `DECK_ID_RE` before it can reach a fetch URL, so `#/d/../../x` can't path-traverse out of `data/colleagues/`.
 
 The player overlay takes priority over routing — if `playerStore.currentColleagueId` is set, the player renders regardless of hash. See `src/App.tsx`.
+
+**No roster route exists.** The old landing (category bubbles → name bubbles → password modal) is gone, along with the `trainer`/`yfa` routes and `Landing.tsx` / `PasswordModal.tsx`. Don't reintroduce a view that enumerates colleagues — that's the whole point of this design.
 
 ### State
 
 Three Zustand stores in `src/store/`:
-- **`appStore`** — the persistent data (`meta` + `colleagues[]`). Every mutation calls `persist()` which writes to localStorage. Also exposes `loadFromExport(data)` for the runtime data.json fetch.
+- **`appStore`** — the data (`meta` + `colleagues[]`). Admin mutations fire-and-forget a write to IndexedDB. Viewer-side entry points are `loadIndex(index)` (meta only) and `loadDeck(deck)` (one decrypted colleague, never persisted).
 - **`playerStore`** — transient runtime state: `currentColleagueId`, `slideIndex`, `audioEnabled`, `paused` (hold-to-pause: halts auto-advance AND audio), `previewingMedia` (mosaic lightbox: halts auto-advance only — audio keeps playing as the emotional underscore), `unlockedColleagueIds`, `isPreviewMode`. Not persisted.
 - **`toastStore`** — single-toast notifications, used via `showToast(msg)`.
 
@@ -75,22 +82,26 @@ AppData = {
     id, name,
     password?,               // plaintext, ADMIN-ONLY — IS the AES-GCM key. Stripped before encryption.
     slides: Slide[],         // discriminated union, see src/types/index.ts
-    category?: 'trainer' | 'yfa',
-    hidden?: boolean,
+    category?: 'trainer' | 'yfa',   // admin-side grouping only; drives no public UI
+    hidden?: boolean,               // "Paused" — encrypt-data writes NO blob, link 404s
   }]
 }
 
-// What viewers actually fetch — `data/index.json` (no slides, no passwords):
-AppDataIndex = {
-  meta: { title, subtitle, farewellNote },
-  colleagues: [{ id, name, category?, hidden? }]
-}
+// What every visitor fetches — `data/index.json`. Meta only. No roster:
+AppDataIndex = { meta: { title, subtitle, farewellNote } }
+
+// What's inside `data/colleagues/<id>.json.enc`, post-decrypt:
+DeckPayload = { name, category?, slides }
 ```
 
-Slides for a given colleague live in `data/colleagues/<id>.json.enc` and only
-arrive in the store after `PasswordModal` decrypts them with the entered
-password. `setColleagueSlides(id, slides)` populates them; not persisted, so
-a refresh re-prompts.
+A colleague only materialises in the viewer's store after their password
+decrypts their blob: `loadDeck({id, name, category, slides})` inserts them and
+runs `migrateAppData` over the deck. Not persisted, so a refresh re-prompts.
+The **name comes from inside the ciphertext** — that's what makes the "Hi,
+&lt;name&gt; 👋" greeting possible without publishing anyone's name.
+
+Legacy blobs that encrypted a bare `Slide[]` still decrypt; `readPayload()` in
+`Unlock.tsx` accepts both shapes (the legacy one just has no name).
 
 `Slide` is a discriminated union over `type`. Each slide carries:
 - `bg: BgConfig` — discriminated union: `{kind:'preset', preset}` | `{kind:'gradient', from, to, angle, shape, textColor}` | `{kind:'lava', baseColor, blobs[], speed, blur, textColor}`
@@ -145,11 +156,13 @@ Each slide type has its own view component in `src/components/slides/` and gets 
 ### Persistence + load order
 
 On boot:
-1. `appStore` initializes synchronously from **localStorage** (key `goodbye_wrapped_data_v1`). `migrateAppData()` runs on every load — coerces legacy shapes (string `bg`, `{kind:'preset'}` bg unchanged, mosaic `photos[]` → `media[]`, single fragment `dataUrl` → `dataUrls[]`, **`'orb-finale'` and `'wrapped-finale'` slides → `[spirit-animal, soundtrack]` pair** with bg/fragments/song fields preserved on the spirit-animal slide and the legacy colleague-level spirit animal data lifted onto its left section). Migration also DROPS the legacy `passwordHash` field — it's no longer used; admin shows "(needed for encryption)" until the user enters a plaintext `password`.
-2. `useDataJsonLoader` async-fetches `${BASE_URL}data/index.json`. If it returns 200 with valid JSON, calls `loadIndex()` which **replaces** the store with meta + colleague shells (no slides yet). Marks `isExportedFile: true` so admin gates on it.
-3. On bubble click, `PasswordModal` fetches `${BASE_URL}data/colleagues/<id>.json.enc` and runs `decryptJson(blob, enteredPassword)` (AES-GCM via WebCrypto). Auth-tag mismatch surfaces as `WrongPasswordError` — UX-equivalent to the old hash-compare. On success, `setColleagueSlides()` writes them into the store.
+1. `appStore` kicks off an async read from **IndexedDB** at module load (`src/utils/storage.ts`; a one-time migration lifts the legacy `goodbye_wrapped_data_v1` localStorage key if it's still around). `isHydrated` flips true when it resolves. `migrateAppData()` runs on every load — coerces legacy shapes (string `bg`, `{kind:'preset'}` bg unchanged, mosaic `photos[]` → `media[]`, single fragment `dataUrl` → `dataUrls[]`, **`'orb-finale'` and `'wrapped-finale'` slides → `[spirit-animal, soundtrack]` pair** with bg/fragments/song fields preserved on the spirit-animal slide and the legacy colleague-level spirit animal data lifted onto its left section). Migration also DROPS the legacy `passwordHash` field — it's no longer used; admin shows "(needed for encryption)" until the user enters a plaintext `password`.
+2. `useDataJsonLoader` async-fetches `${BASE_URL}data/index.json`. If it returns 200 with valid JSON, calls `loadIndex()` which **replaces** the store with meta and an **empty** colleague list. Marks `isExportedFile: true` — that flag is also what tells `Unlock` to take the fetch-and-decrypt path instead of the admin-draft path.
+3. On submit, `Unlock` fetches `${BASE_URL}data/colleagues/<id>.json.enc` (id from the `#/d/<id>` link) and runs `decryptJson(blob, enteredPassword)` (AES-GCM via WebCrypto). Auth-tag mismatch surfaces as `WrongPasswordError`. On success, `loadDeck()` inserts the colleague, and the "Hi, &lt;name&gt;" overlay's tap opens the player (that tap is also the user gesture that unblocks audio autoplay).
 
-So in production, the index file always wins over a viewer's stale localStorage; per-colleague slides only land in memory after a successful decrypt and are never persisted (refresh re-prompts).
+So in production, the index file always wins over a viewer's stale local data; a colleague's deck only lands in memory after a successful decrypt and is never persisted (refresh re-prompts).
+
+**Failure messages are deliberately identical.** Wrong password, unknown id, and unpublished deck all render `GENERIC_FAILURE`. Distinct errors would let someone probe the id space to learn how many decks exist and which ids are real. HTTP status is `console.warn`'d for your own debugging, not shown.
 
 ## Conventions
 
@@ -178,19 +191,20 @@ Dark text mode driven by `.slide.text-dark` class set in JS via `bgNeedsDarkText
 
 Hosted on **GitHub Pages** at `https://artthoufeelingitnow.github.io/farewell-team-wrapped/` (repo: `artthoufeelingitnow/farewell-team-wrapped`, public).
 
-The repo is **public**, so committing real content directly would expose letter text + photos. Workaround: each colleague's deck ships as a **per-colleague AES-GCM blob**, encrypted with that colleague's own password. Only a small `index.json` (names + categories) is downloaded by every visitor; the heavy slide content (with base64 photos) is fetched and decrypted only after the right password is entered. This solves both privacy (slides are real-encrypted, not just hash-gated) AND landing-page weight (~10s of MB → a few KB).
+The repo is **public**, so committing real content directly would expose letter text + photos — and a public name list would expose *who the gift is for*. Workaround: each colleague's deck ships as a **per-colleague AES-GCM blob** (including their name), encrypted with that colleague's own password. Every visitor downloads only a tiny `index.json` carrying `meta` and nothing else; the deck is fetched and decrypted only after the right password is entered against the right link. This solves privacy of content, privacy of the roster, AND page weight (~10s of MB → a few hundred bytes).
 
 ### Content workflow
 
-1. Edit content in admin (`npm run dev`). Each colleague needs a `password` field set (plaintext — admin shows "(set ✓)" / "(needed for encryption)").
+1. Edit content in admin (`npm run dev`). Each colleague needs a `password` field set (plaintext — admin shows "(set ✓)" / "(needed for encryption)") and Link status = **Live**.
 2. Click "Export final file" → downloads `data.json`. **This file contains plaintext passwords** and is gitignored.
 3. Move it to repo root: `mv ~/Downloads/data.json .`
 4. `npm run encrypt-data` → reads `data.json` and writes:
-   - `data/index.json` — public, no slides, no passwords
-   - `data/colleagues/<id>.json.enc` — AES-GCM-256, PBKDF2-SHA256 600k iters, key = colleague's plaintext password
-   The script wipes `data/` first, so removing a colleague from `data.json` removes their `.json.enc` too.
+   - `data/index.json` — public, meta only, **no roster**
+   - `data/colleagues/<id>.json.enc` — AES-GCM-256, PBKDF2-SHA256 600k iters, key = colleague's plaintext password, payload `{name, category?, slides}`
+   The script wipes `data/` first, so removing a colleague from `data.json` removes their `.json.enc` too. It skips anyone with no password, no slides, or Link status = Paused, warns loudly for each, then **prints every published person's private link** to stdout.
 5. Commit + push the `data/` tree.
 6. GitHub Actions builds with `npm run build`, then copies the committed `data/` tree into `dist/data/`. No secrets needed in the workflow — there's no global passphrase anymore.
+7. Send each person their link + password. Admin's **💬 Copy message** button (per colleague) puts a ready-to-send blurb with both on the clipboard; **🔗 Copy link** copies just the URL.
 
 `scripts/encrypt-data.mjs` (Node, WebCrypto) MUST stay in sync with `src/utils/crypto.ts` (browser, WebCrypto) — same format `{v, salt, iv, ciphertext}` with the same KDF parameters.
 
@@ -270,8 +284,8 @@ A 3D generative orb (three.js + @react-three/fiber + colorthief + simplex-noise)
 
 ## Gotchas
 
-### 1. localStorage scope
-Editing on laptop ≠ editing on phone. Pick one device, or export frequently as backup.
+### 1. Admin draft is device-local (IndexedDB)
+Editing on laptop ≠ editing on phone. Pick one device, or export frequently as backup. "Import data.json" in admin restores a draft from a previous export.
 
 ### 2. Photo size
 Each photo is base64-embedded into `data.json`. `compressImage()` shrinks to 900px max @ 0.85 JPEG (single photos) or 700px (mosaic). 9 mosaic + 3 single can push past 5MB. Drop `maxDim` if it gets unwieldy.
@@ -282,25 +296,31 @@ The 30s clip Apple returns always starts at the same point (usually the chorus).
 ### 4. Songs need internet at view time
 Song URLs reference Apple's CDN. Colleagues must be online when viewing.
 
-### 5. Password security
+### 5. What the private link does and doesn't hide
+The link (`#/d/<id>`) is a *locator*, not a credential — the password is the credential. Anyone holding a link still needs the password. But note the limits of the roster hiding:
+- **The public repo lists the blob filenames.** Anyone browsing `data/colleagues/` on GitHub sees N opaque ids, so the *count* of decks is visible. The names are not.
+- **The hash fragment never reaches the server**, so the id doesn't appear in GH Pages logs or Referer headers — but it does appear in the recipient's browser history and in any screenshot of the URL bar.
+- Blob sizes differ, so file listings leak rough deck sizes. Nothing identifying.
+
+### 6. Password security
 Each colleague's deck is real AES-GCM encrypted with their own password (PBKDF2-SHA256 600k iters). The encrypted blob is what ships to GitHub; the slides only exist in plaintext server-side as the gitignored `data.json` and client-side after a successful decrypt. Still: a determined attacker who guesses the password gets the deck, and the password DOES travel through your laptop's localStorage (admin source-of-truth). Don't pick passwords that would be catastrophic if cracked, and don't share `data.json`.
 
-### 6. Transient admin state in slides
+### 7. Transient admin state in slides
 Admin-only fields leak into `slide` objects: `showSongPicker`, `songSearchQuery`, etc. `cleanColleagueForExport()` strips them. Add new transient fields to `TRANSIENT_FIELDS` in `src/utils/index.ts`.
 
-### 7. WebCrypto parameters must match across encrypt + decrypt
+### 8. WebCrypto parameters must match across encrypt + decrypt
 `PBKDF2_ITERATIONS = 600_000`, `SALT_BYTES = 16`, `IV_BYTES = 12`, `AES-GCM-256` are duplicated in `src/utils/crypto.ts` (browser) and `scripts/encrypt-data.mjs` (Node). Change one without the other and every existing `.json.enc` becomes undecryptable. Bump the `v` field in the blob format if you ever need to do this — both sides reject mismatched versions.
 
-### 8. Don't commit data.json (plaintext, includes plaintext passwords)
+### 9. Don't commit data.json (plaintext, includes plaintext passwords)
 It's in `.gitignore`. The committed artifacts are `data/index.json` (public) + `data/colleagues/*.json.enc` (encrypted).
 
-### 9. Vite base path mismatches
+### 10. Vite base path mismatches
 If you rename the GH Pages repo or switch to a custom domain, update `base` in `vite.config.ts`.
 
-### 10. StrictMode double-render
+### 11. StrictMode double-render
 React 19 + StrictMode runs effects twice in dev. The audio engine's URL-match guard makes it idempotent; new module-level state must tolerate double-firing.
 
-### 11. The `:not()` content-layering rule
+### 12. The `:not()` content-layering rule
 `src/styles/global.css` has:
 ```css
 .slide > *:not(.fragment-layer):not(.slide-bg):not(.photo-lightbox):not(.photo-mosaic):not(.quote-mark):not(.keepsake) {
@@ -310,19 +330,19 @@ React 19 + StrictMode runs effects twice in dev. The audio engine's URL-match gu
 ```
 This applies `position: relative; z-index: 2` to every direct child of `.slide`, *except* the listed exclusions. Anything that needs to be `position: absolute` (lightbox overlays, full-bleed children, the keepsake shell) must be added to the exclusion list — otherwise its layout breaks silently. Specificity is (0,6,0), so a per-class override needs equal-or-higher specificity to win.
 
-### 12. .mov files don't play reliably outside Safari
+### 13. .mov files don't play reliably outside Safari
 iPhone-recorded `.mov` (HEVC/H.265) plays in Safari but breaks in Chrome/Firefox. Always re-encode to `.mp4` (H.264) with the ffmpeg one-liner above.
 
-### 13. html-to-image + web fonts
+### 14. html-to-image + web fonts
 `html-to-image` will silently fall back to system fonts if the page's web fonts aren't fully loaded at capture time. `saveCardAsPng()` awaits `document.fonts.ready` first, but if a font is added after capture (rare), it can still miss. Test PNG export on a cold cache (private window) before shipping any change to the keepsake slides' typography.
 
-### 14. Mosaic edge-photo taps register as nav
+### 15. Mosaic edge-photo taps register as nav
 Player has 30%-wide `nav-zone` overlays at left/right (z-index 4). Mosaic photos sit at `z-index: 7` so taps land on the photo. Critical that `.photo-mosaic` does NOT form a stacking context (it's in the `:not()` exclusion list — keeps the inner `<img>`/`<video>` z-index propagating to the player's stacking context). The `.letter-wrap` is in the same exclusion list at `z-index: 7` for the same reason — without it, only the middle 40% of a long letter is actually scrollable because the side nav-zones cover the rest.
 
-### 15. `navigator.share({ files })` only works in real browsers
+### 16. `navigator.share({ files })` only works in real browsers
 The keepsake save flow opens the OS share sheet (→ "Save to Photos" / "Save to Gallery") only when the browser supports Web Share with files. **In-app browsers** (Instagram, Facebook, Slack, Gmail link previews, etc.) usually return `false` from `navigator.canShare({ files })`, so the user falls through to the download path. There is no zero-tap "save to gallery" available on the open web — even when the share sheet works, the user still taps "Save Image" once. If a colleague reports the file going to Downloads instead of Photos, they're almost certainly opening the link inside an app, not Safari/Chrome.
 
-### 16. Hold-to-pause vs scroll containers
+### 17. Hold-to-pause vs scroll containers
 The hold-to-pause pointer handlers live on `.player` and bubble-receive every touch. The `HOLD_MOVE_THRESHOLD_PX` of 8px cancels the timer once the user starts scrolling — that's why letter-wrap scrolling works without accidentally triggering pause. If you add a new scrollable region, make sure its `touch-action` permits the axis you want (`pan-y` for vertical) so the browser actually scrolls instead of fighting the pointer handler.
 
 ## Common tasks
@@ -335,7 +355,8 @@ The hold-to-pause pointer handlers live on `.player` and bubble-receive every to
 | Tweak crossfade | `FADE_MS` in `src/utils/constants.ts` |
 | Change slide gradient | `bg-*` CSS classes near top of `src/styles/global.css` |
 | Modify export | `handleExport()` in `src/components/admin/Admin.tsx` |
-| Touch the password flow | `src/components/landing/PasswordModal.tsx` + `decryptJson()` in `src/utils/crypto.ts` |
+| Touch the password / unlock flow | `src/components/landing/Unlock.tsx` + `decryptJson()` in `src/utils/crypto.ts` |
+| Change the private-link format | `src/utils/links.ts` (`deckHash`/`deckUrl`/`SITE_URL`) + `parseHash()` in `useHashRoute.ts` + `SITE_URL` in `scripts/encrypt-data.mjs` — all three together |
 | Change the encrypt format | `src/utils/crypto.ts` AND `scripts/encrypt-data.mjs` together — they MUST agree |
 | Change deploy / data flow | `.github/workflows/deploy.yml` + `useDataJsonLoader.ts` + `scripts/encrypt-data.mjs` |
 | Tweak spirit-animal slide visuals | `src/components/slides/SpiritAnimalSlideView.tsx` + `.keepsake-*` / `.spirit-section-*` rules in `global.css` |
@@ -361,7 +382,11 @@ npm run encrypt-data # data.json → data/index.json + data/colleagues/*.json.en
 
 ## Don't break
 
+- **The no-roster invariant.** `data/index.json` carries `meta` and nothing else, and no name, id, or count is published anywhere. Don't add a colleague list to the index, a name to the URL, or any view that enumerates people. The whole design exists so a visitor can't see who this was made for.
+- **Names live inside the ciphertext** (`DeckPayload.name`). Moving a name back out to a public file re-breaks the above.
+- **Identical failure messages** in `Unlock.tsx` — separate "no such deck" / "wrong password" errors would make the id space probeable.
 - The decrypt-to-unlock gate (no `passwordHash` field anymore — gating IS the AES-GCM auth-tag check; if you bring back a hash field, also bring back the bypass it represents)
+- `DECK_ID_RE` validation before a deck id reaches a fetch URL — it's what stops `#/d/../../whatever`
 - The encrypted-blob deploy invariant (`data.json` gitignored — contains plaintext passwords; only `data/index.json` + `data/colleagues/*.json.enc` are committed)
 - Auto-save on every edit (don't introduce a manual "save" requirement)
 - The single global CSS file — visual consistency depends on it

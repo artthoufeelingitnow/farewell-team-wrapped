@@ -216,6 +216,35 @@
   .admin-link:hover { color: rgba(255,255,255,0.6); }
 
   /* ============================================================
+     UNLOCK SCREEN
+     The whole public surface: one card on the lava background. Shares the
+     .pw-* input/error/action styles with the old password modal.
+     ============================================================ */
+  .unlock-card {
+    background: linear-gradient(135deg, #1a0a2e 0%, #0a0014 100%);
+    border: 1px solid rgba(255,255,255,0.15);
+    border-radius: 24px;
+    padding: 36px 28px;
+    max-width: 380px;
+    width: 100%;
+    text-align: center;
+    box-shadow: 0 24px 60px rgba(0,0,0,0.45);
+  }
+  .unlock-card h3 {
+    font-family: var(--font-display);
+    font-size: 26px;
+    font-weight: 400;
+    margin-bottom: 8px;
+    letter-spacing: 0.5px;
+  }
+  .unlock-card p {
+    color: rgba(255,255,255,0.6);
+    margin-bottom: 20px;
+    font-size: 14px;
+    line-height: 1.55;
+  }
+
+  /* ============================================================
      PASSWORD MODAL
      ============================================================ */
   .pw-overlay {
@@ -272,6 +301,26 @@
   }
   .pw-actions { display: flex; gap: 10px; }
   .pw-actions button { flex: 1; }
+
+  /* Admin: the private link for one colleague, plus copy buttons. */
+  .deck-link-row {
+    margin-top: 14px;
+    padding-top: 14px;
+    border-top: 1px solid rgba(255,255,255,0.08);
+  }
+  .deck-link {
+    display: block;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 12px;
+    color: rgba(255,255,255,0.7);
+    background: rgba(0,0,0,0.35);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 8px;
+    padding: 8px 10px;
+    margin: 6px 0 8px;
+    overflow-wrap: anywhere;
+  }
+  .deck-link-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 
   /* ============================================================
      COMMON BUTTONS

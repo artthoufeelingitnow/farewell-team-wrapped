@@ -51,13 +51,13 @@ interface AppState {
   moveSlide: (colleagueId: string, index: number, dir: 'up' | 'down') => void;
   resetAll: () => void;
 
-  /** Replace the dataset's meta + colleague-shells from `data/index.json`.
-   *  Slides start empty for each colleague; they get filled in on demand by
-   *  `setColleagueSlides` after the password decrypts the per-colleague file. */
+  /** Replace the dataset's meta from `data/index.json` and clear the colleague
+   *  list. The public index carries no roster at all — a colleague only ever
+   *  materialises via `loadDeck` once their password has decrypted their blob. */
   loadIndex: (index: AppDataIndex) => void;
-  /** Populate one colleague's slides post-decrypt. Does NOT persist —
-   *  decrypted decks are kept in memory only, so a refresh re-prompts. */
-  setColleagueSlides: (colleagueId: string, slides: Slide[]) => void;
+  /** Insert (or replace) one fully-decrypted colleague. Does NOT persist —
+   *  decrypted decks stay in memory only, so a refresh re-prompts. */
+  loadDeck: (deck: { id: string; name: string; category?: Colleague['category']; slides: Slide[] }) => void;
   /** Re-read the admin's source-of-truth from IndexedDB. Used when entering
    *  the admin route so a viewer-flow `loadIndex()` doesn't keep its grip on
    *  the store. Sets `isExportedFile: false` since we're back on draft data. */
@@ -71,12 +71,25 @@ interface AppState {
 
 /** Read IndexedDB → set state. Dedup'd so concurrent callers share one in-flight
  *  read. We migrate from the legacy localStorage key on first run if it's still
- *  around. */
+ *  around.
+ *
+ *  `force` is for the admin route's explicit reload. Without it we bail if the
+ *  viewer flow has already taken over (`isExportedFile`): a slow IndexedDB read
+ *  landing after `loadIndex()` — or worse, after a colleague has decrypted their
+ *  deck — would otherwise flip `isExportedFile` back to false and wipe them out
+ *  of the store. */
 let hydratePromise: Promise<void> | null = null;
-async function runHydrate(setState: (patch: Partial<AppState>) => void): Promise<void> {
+async function runHydrate(
+  setState: (patch: Partial<AppState>) => void,
+  force = false,
+): Promise<void> {
   try {
     let loaded = await loadAll();
     if (!loaded) loaded = await migrateFromLocalStorage();
+    if (!force && useAppStore.getState().isExportedFile) {
+      setState({ isHydrated: true });
+      return;
+    }
     if (loaded) {
       const migrated = migrateAppData(loaded);
       setState({ data: migrated, isExportedFile: false, isHydrated: true });
@@ -190,37 +203,36 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   loadIndex: (index) => {
-    // Build colleague shells (no slides yet — those arrive post-decrypt). Run
-    // them through migrateAppData so category/hidden defaults stay consistent.
-    const migrated = migrateAppData({
-      meta: index.meta,
-      colleagues: index.colleagues.map((c) => ({
-        id: c.id,
-        name: c.name,
-        slides: [],
-        category: c.category,
-        hidden: c.hidden,
-      })),
-    });
-    set({ data: migrated, isExportedFile: true });
-    // Don't persist — viewers shouldn't accumulate state.
+    // Meta only. The roster is deliberately absent from the public index, so a
+    // viewer's store starts with zero colleagues and gains exactly one — their
+    // own — after `loadDeck`. Don't persist; viewers shouldn't accumulate state.
+    set({ data: { meta: index.meta, colleagues: [] }, isExportedFile: true });
   },
 
-  setColleagueSlides: (colleagueId, slides) => {
-    const next = {
-      ...get().data,
-      colleagues: get().data.colleagues.map((c) =>
-        c.id === colleagueId ? { ...c, slides } : c,
-      ),
-    };
-    set({ data: next });
-    // Intentionally not persisted — decrypted slides stay in memory only.
+  loadDeck: ({ id, name, category, slides }) => {
+    // Run the decrypted deck through the normal migration so legacy slide
+    // shapes (and the legacy-finale expansion) are handled exactly as they are
+    // for admin data. The real name matters here — migration uses it.
+    const migrated = migrateAppData({
+      meta: get().data.meta,
+      colleagues: [{ id, name, category, slides }],
+    });
+    const colleague = migrated.colleagues[0];
+    if (!colleague) return;
+    set((s) => ({
+      data: {
+        ...s.data,
+        colleagues: [...s.data.colleagues.filter((c) => c.id !== id), colleague],
+      },
+    }));
+    // Intentionally not persisted — decrypted decks stay in memory only.
   },
 
   reloadFromStorage: () => {
     // Re-run hydrate so the admin sees the freshest IndexedDB state. Dedup the
     // in-flight read so a rapid route flip doesn't fire concurrent transactions.
-    hydratePromise = runHydrate(set);
+    // Forced: entering admin SHOULD stomp any viewer-flow state.
+    hydratePromise = runHydrate(set, true);
     return hydratePromise;
   },
 

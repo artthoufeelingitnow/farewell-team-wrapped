@@ -3,11 +3,24 @@ import { useAppStore } from '../../store/appStore';
 import { usePlayerStore } from '../../store/playerStore';
 import type { Colleague, ColleagueCategory, Slide, SlideType } from '../../types';
 import { makeDefaultSlide } from '../../utils';
+import { deckUrl } from '../../utils/links';
+import { showToast } from '../../store/toastStore';
 import { SlideEditor } from './SlideEditor';
 import { AddSlideMenu } from './AddSlideMenu';
 
 interface Props {
   colleague: Colleague;
+}
+
+/** Clipboard write with a toast either way. `navigator.clipboard` needs a
+ *  secure context — fine on localhost and https, so admin always has it. */
+async function copy(text: string, okMessage: string): Promise<void> {
+  try {
+    await navigator.clipboard.writeText(text);
+    showToast(okMessage);
+  } catch {
+    showToast('Could not copy — select it manually');
+  }
 }
 
 export function ColleagueEditor({ colleague }: Props) {
@@ -109,7 +122,7 @@ export function ColleagueEditor({ colleague }: Props) {
             </select>
           </div>
           <div>
-            <label className="field-label">Visibility</label>
+            <label className="field-label">Link status</label>
             <select
               className="field-select"
               value={colleague.hidden ? 'hidden' : 'visible'}
@@ -119,12 +132,43 @@ export function ColleagueEditor({ colleague }: Props) {
                 })
               }
             >
-              <option value="visible">Visible</option>
-              <option value="hidden">Hidden (dimmed, not clickable)</option>
+              <option value="visible">Live — deck gets published</option>
+              <option value="hidden">Paused — no blob, link 404s</option>
             </select>
           </div>
         </div>
 
+        {/* The only way into this deck. There's no public roster, so this link
+            plus the password above is what you send — nothing else works. */}
+        <div className="deck-link-row">
+          <label className="field-label">Private link</label>
+          <code className="deck-link">{deckUrl(colleague.id)}</code>
+          <div className="deck-link-actions">
+            <button
+              className="btn btn-sm btn-ghost"
+              onClick={() => void copy(deckUrl(colleague.id), 'Link copied')}
+            >
+              🔗 Copy link
+            </button>
+            <button
+              className="btn btn-sm btn-ghost"
+              disabled={!colleague.password}
+              title={
+                colleague.password
+                  ? 'Copy a ready-to-send message with the link and password'
+                  : 'Set a password first'
+              }
+              onClick={() =>
+                void copy(
+                  `Hey ${colleague.name || 'you'} — made you something 💌\n${deckUrl(colleague.id)}\nPassword: ${colleague.password}`,
+                  'Message copied',
+                )
+              }
+            >
+              💬 Copy message
+            </button>
+          </div>
+        </div>
       </div>
 
       <div className="slides-section">

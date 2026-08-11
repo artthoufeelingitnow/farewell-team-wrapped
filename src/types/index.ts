@@ -268,7 +268,8 @@ export type Slide =
   | MemeSlide
   | SignoffSlide;
 
-/** Landing-page grouping. Trainers vs YFA get rendered as separate sections. */
+/** Admin-side grouping. No longer drives any public UI (there is no roster
+ *  page); kept so the admin list stays organised and so old data still parses. */
 export type ColleagueCategory = 'trainer' | 'yfa';
 
 export interface Colleague {
@@ -282,7 +283,8 @@ export interface Colleague {
   slides: Slide[];
   /** Landing-page grouping. Legacy data without this is treated as 'trainer'. */
   category?: ColleagueCategory;
-  /** When true, the bubble still renders on the landing page but is non-clickable and dimmed. */
+  /** When true, this deck is NOT published — `encrypt-data` writes no blob for
+   *  them, so their link 404s. Use it for people whose deck isn't finished. */
   hidden?: boolean;
 }
 
@@ -297,16 +299,23 @@ export interface AppData {
   colleagues: Colleague[];
 }
 
-/** Public landing-only entry. No slides, no password — just enough to draw the bubble. */
-export interface ColleagueIndexEntry {
-  id: string;
-  name: string;
-  category?: ColleagueCategory;
-  hidden?: boolean;
-}
-
-/** Shape of `data/index.json` shipped to viewers. */
+/** Shape of `data/index.json` — the only file every visitor downloads.
+ *
+ *  It deliberately carries NO colleague list. Shipping names publicly would
+ *  tell anyone with the URL exactly who this was made for; instead each person
+ *  gets a private link (`#/d/<id>`) and their name comes back inside their own
+ *  encrypted blob, after the password decrypts it. */
 export interface AppDataIndex {
   meta: AppMeta;
-  colleagues: ColleagueIndexEntry[];
+}
+
+/** Plaintext contents of `data/colleagues/<id>.json.enc`, post-decrypt. The
+ *  name lives in here (not in the public index) so it stays private until the
+ *  right password is entered.
+ *
+ *  Legacy blobs encrypted a bare `Slide[]`; the unlock path accepts both. */
+export interface DeckPayload {
+  name: string;
+  category?: ColleagueCategory;
+  slides: Slide[];
 }

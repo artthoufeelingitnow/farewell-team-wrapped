@@ -3,8 +3,14 @@
  * Reads the gitignored `data.json` (admin's source-of-truth, with plaintext
  * passwords on each colleague) and writes the deploy artifacts:
  *
- *   data/index.json                 — public, no slides, no passwords
- *   data/colleagues/<id>.json.enc   — AES-GCM, key = colleague.password via PBKDF2
+ *   data/index.json                 — public: meta ONLY. No names, no ids.
+ *   data/colleagues/<id>.json.enc   — AES-GCM, key = colleague.password via PBKDF2.
+ *                                     Payload is { name, category, slides } —
+ *                                     the name lives inside the ciphertext so
+ *                                     the roster is never published.
+ *
+ * There is no public list of colleagues anywhere: the only way into a deck is
+ * the private `#/d/<id>` link (printed below) plus that person's password.
  *
  * Format must stay in sync with src/utils/crypto.ts. Both sides use WebCrypto
  * (Node ≥ 19 exposes globalThis.crypto).
@@ -20,6 +26,11 @@ import { fileURLToPath } from 'node:url';
 const PBKDF2_ITERATIONS = 600_000;
 const SALT_BYTES = 16;
 const IV_BYTES = 12;
+
+/** Mirrors SITE_URL in src/utils/links.ts and `base` in vite.config.ts —
+ *  change all three together if the deploy target ever moves. */
+const SITE_URL = 'https://artthoufeelingitnow.github.io/farewell-team-wrapped/';
+const deckUrl = (id) => `${SITE_URL}#/d/${id}`;
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = join(__dirname, '..');
@@ -92,8 +103,7 @@ function main() {
   if (existsSync(OUT_DIR)) rmSync(OUT_DIR, { recursive: true, force: true });
   mkdirSync(OUT_COLLEAGUES, { recursive: true });
 
-  const indexEntries = [];
-  let encryptedCount = 0;
+  const published = [];
   let skippedCount = 0;
 
   return Promise.all(
@@ -104,34 +114,46 @@ function main() {
         return;
       }
       const slides = Array.isArray(c.slides) ? c.slides.map(stripTransient) : [];
-      // Only include colleagues with a fully-formed, encryptable deck in the
-      // public index. Anything without a password or without slides would
-      // render as a bubble that 404s on click — better to omit them entirely
-      // until the admin finishes setting them up.
-      if (!c.password || slides.length === 0) {
-        console.warn(
-          `⚠ ${c.name} (${c.id}) — ${!c.password ? 'no password' : 'no slides'}, omitting from index.`,
-        );
+      // Only publish a fully-formed, encryptable deck. Anything missing a
+      // password or slides — or explicitly paused via `hidden` — gets no blob,
+      // so its link 404s until you finish setting it up.
+      const reason = !c.password
+        ? 'no password'
+        : slides.length === 0
+          ? 'no slides'
+          : c.hidden
+            ? 'link status is Paused'
+            : null;
+      if (reason) {
+        console.warn(`⚠ ${c.name} (${c.id}) — ${reason}, NOT published. Their link will 404.`);
         skippedCount++;
         return;
       }
-      indexEntries.push({
-        id: c.id,
+      // The name rides inside the ciphertext: it's what greets them after
+      // unlock, and it must not appear in any public file.
+      const payload = {
         name: c.name,
         ...(c.category ? { category: c.category } : {}),
-        ...(c.hidden ? { hidden: true } : {}),
-      });
-      const blob = await encryptJson(slides, c.password);
+        slides,
+      };
+      const blob = await encryptJson(payload, c.password);
       writeFileSync(join(OUT_COLLEAGUES, `${c.id}.json.enc`), JSON.stringify(blob));
-      encryptedCount++;
+      published.push(c);
     }),
   ).then(() => {
-    writeFileSync(
-      OUT_INDEX,
-      JSON.stringify({ meta: data.meta ?? {}, colleagues: indexEntries }, null, 2),
-    );
+    // Meta only — deliberately no colleague list. See src/types AppDataIndex.
+    writeFileSync(OUT_INDEX, JSON.stringify({ meta: data.meta ?? {} }, null, 2));
+
+    if (published.length > 0) {
+      console.log('\nPrivate links — send each person theirs, with their password:\n');
+      const pad = Math.max(...published.map((c) => c.name.length));
+      for (const c of published) {
+        console.log(`  ${c.name.padEnd(pad)}  ${deckUrl(c.id)}`);
+      }
+      console.log('\n(Passwords are in data.json — never commit or paste that file.)\n');
+    }
     console.log(
-      `✓ Wrote data/index.json (${indexEntries.length} colleagues) + ${encryptedCount} encrypted decks. Skipped: ${skippedCount}.`,
+      `✓ Wrote data/index.json (meta only, no roster) + ${published.length} encrypted decks. Skipped: ${skippedCount}.`,
     );
   });
 }

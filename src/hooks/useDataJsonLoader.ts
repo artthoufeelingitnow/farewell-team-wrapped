@@ -6,26 +6,30 @@ import { useHashRoute } from './useHashRoute';
 /**
  * Route-aware data source.
  *
- * On viewer routes (landing / trainer / yfa): fetches `${BASE_URL}data/index.json`
- * and replaces the store with meta + colleague shells (no slides). Per-colleague
- * slides are fetched + decrypted lazily by PasswordModal when the user enters
- * their password.
+ * On viewer routes (landing / deck): fetches `${BASE_URL}data/index.json`, which
+ * contains ONLY `meta` — no names, no ids, no roster of any kind. Its arrival is
+ * also what flips `isExportedFile: true`, which is how the unlock screen knows
+ * to take the fetch-and-decrypt path rather than the admin-draft path.
  *
- * On the admin route: re-reads the admin's source-of-truth from localStorage,
- * so a previous viewer-flow `loadIndex()` doesn't leave the store in viewer
- * shape (no slides, no passwords) when the user navigates back to admin.
+ * The colleague themselves is fetched + decrypted lazily by the unlock screen
+ * using the id from their private `#/d/<id>` link.
  *
- * In dev (no index file in public/), the fetch 404s silently and the admin's
- * localStorage data is used.
+ * On the admin route: re-reads the admin's source-of-truth from IndexedDB, so a
+ * previous viewer-flow `loadIndex()` doesn't leave the store in viewer shape
+ * when the user navigates back to admin.
+ *
+ * In dev (no data/ tree served), the fetch 404s silently and the admin's local
+ * draft is used.
  */
 export function useDataJsonLoader() {
   const loadIndex = useAppStore((s) => s.loadIndex);
   const reloadFromStorage = useAppStore((s) => s.reloadFromStorage);
   const [route] = useHashRoute();
+  const isAdmin = route.kind === 'admin';
 
   useEffect(() => {
-    if (route === 'admin') {
-      reloadFromStorage();
+    if (isAdmin) {
+      void reloadFromStorage();
       return;
     }
     let cancelled = false;
@@ -36,9 +40,7 @@ export function useDataJsonLoader() {
       })
       .then((index) => {
         if (cancelled) return;
-        if (index && Array.isArray(index.colleagues)) {
-          loadIndex(index);
-        }
+        if (index && index.meta) loadIndex(index);
       })
       .catch(() => {
         // Expected in dev or when no exported data exists; silent.
@@ -46,5 +48,5 @@ export function useDataJsonLoader() {
     return () => {
       cancelled = true;
     };
-  }, [route, loadIndex, reloadFromStorage]);
+  }, [isAdmin, loadIndex, reloadFromStorage]);
 }
