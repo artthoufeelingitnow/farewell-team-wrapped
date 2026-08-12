@@ -123,7 +123,7 @@ Registered in `src/utils/constants.ts → SLIDE_TYPES`:
 | `letter` | Long-form heartfelt message (scrollable) |
 | `mosaic` | 3×3 grid of `media: MediaItem[]` (mixed images and videos). Tap a tile → swipe-down-to-dismiss lightbox. **`photos: string[]` is legacy — migration converts to `media`.** |
 | `spirit-animal` | Two-column keepsake card. Each section holds a `MediaItem` (image/GIF/video URL) with drag-to-position crop + optional caption. Slide-level: eyebrow (default "this is you if you were a cat..."), optional title (display font, with Display/Spotify font picker), tagline, optional bottom caption. PNG export via Web Share API → camera roll on mobile, download elsewhere. Default duration 30s. |
-| `soundtrack` | Soundtrack keepsake card. Eyebrow (default "your soundtrack") + optional title (display font, with Display/Spotify font picker) + auto-derived track list (max 5, curated via `featuredTrackKeys`) + optional italic tagline at the bottom. PNG export via Web Share API. Default duration 30s. |
+| `soundtrack` | Soundtrack keepsake card. Eyebrow (default "your soundtrack") + optional title (display font, with Display/Spotify font picker) + track list (max 5, curated via `featuredTrackKeys`) + optional italic tagline at the bottom. Tracks come from the deck's songs **plus `extraTracks`** — bonus songs stored on the slide that aren't on any slide. PNG export via Web Share API. Default duration 30s. |
 | `signoff` | Final card with replay/close buttons |
 
 `MediaItem = { kind: 'image', src } | { kind: 'video', src }`. Image `src` is base64 dataUrl; video `src` is a URL (typically `${BASE_URL}videos/foo.mp4`).
@@ -239,11 +239,19 @@ Two side-by-side sections (`left` + `right`), each with: a `MediaItem` (image/GI
 
 ### Soundtrack slide
 
-Slide-level fields: `eyebrow` (small caps, default `"your soundtrack"`), `title` (display font, optional — e.g. a custom phrase), `titleFont` (Display / Spotify), `featuredTrackKeys?: string[]` (curated subset of the deck's songs, capped at 5; `undefined` = auto-pick first 5), optional `tagline` (italic, rendered at the bottom). No footer (matches spirit-animal).
+Slide-level fields: `eyebrow` (small caps, default `"your soundtrack"`), `title` (display font, optional — e.g. a custom phrase), `titleFont` (Display / Spotify), `featuredTrackKeys?: string[]` (curated subset of the **track pool**, capped at 5; `undefined` = auto-pick first 5), `extraTracks?: ExtraTrack[]` (bonus songs, below), optional `tagline` (italic, rendered at the bottom). No footer (matches spirit-animal).
 
-- **Type:** `SoundtrackSlide` in `src/types/index.ts`.
-- **View:** [`src/components/slides/SoundtrackSlideView.tsx`](src/components/slides/SoundtrackSlideView.tsx). Same flat structure as spirit-animal: eyebrow / title / tracks / tagline rendered as **direct children** of the card. `justify-content: space-evenly` distributes equal gaps; with 4 children that's 5 gaps (top edge + 3 between + bottom edge).
-- **Field editor:** `SoundtrackFields` in `SlideFieldsEditor.tsx`. Eyebrow + title + `TitleFontPicker`, then the tagline input, then the checkbox-based track picker (capped at 5, with "↺ Auto" reset). Stored `featuredTrackKeys` are filtered against the current song list before display so orphaned keys (from songs that were renamed/removed elsewhere) don't inflate the counter.
+**The track pool** = the deck's songs (deck order, deduped by `name|artist`) **+** the slide's `extraTracks`. Built by `getTrackPool(colleague, slide)`; `getFeaturedSoundtrack(colleague, slide)` then applies the curation. All three of these agree on one key format via `trackKey(name, artist)` — if they ever diverge, `featuredTrackKeys` silently drops entries.
+
+- **Type:** `SoundtrackSlide` + `ExtraTrack` in `src/types/index.ts`.
+- **View:** [`src/components/slides/SoundtrackSlideView.tsx`](src/components/slides/SoundtrackSlideView.tsx). Same flat structure as spirit-animal: eyebrow / title / tracks / tagline rendered as **direct children** of the card. `justify-content: space-evenly` distributes equal gaps; with 4 children that's 5 gaps (top edge + 3 between + bottom edge). The card renders deck songs and bonus tracks identically — the distinction is admin-only.
+- **Field editor:** `SoundtrackFields` in `SlideFieldsEditor.tsx`. Eyebrow + title + `TitleFontPicker`, tagline, then the checkbox track picker (capped at 5, "↺ Auto" reset, ↑↓ reorder), then an iTunes search for adding bonus tracks. Stored `featuredTrackKeys` are filtered against the current pool before display so orphaned keys (renamed/removed songs, deleted extras) don't inflate the counter.
+
+**Bonus tracks (`extraTracks`)** — songs that belong on someone's list but never scored a slide. Added via the editor's "Add a song that isn't in the deck" iTunes search, which stores `{name, artist, art}` on the slide. They're marked with a `bonus` badge and an `×` remove button in the picker only. Notes:
+- Adding one **features it immediately** (unless already at 5) — otherwise you'd add a track and see nothing change on the card.
+- Deck songs win key collisions, so a bonus track that later gets used on a slide collapses to one entry rather than duplicating.
+- Removing one leaves `featuredTrackKeys` alone if it's still `undefined` (auto), so deleting a bonus track doesn't silently freeze an auto-pick into a fixed list.
+- They carry **no `songUrl`** — a bonus track is a line on the card, not something the audio engine ever plays.
 
 ### Shared keepsake plumbing
 
@@ -271,6 +279,7 @@ Slide-level fields: `eyebrow` (small caps, default `"your soundtrack"`), `title`
 - **Layout @ 360px width:** narrowest realistic phone screen — two side-by-side sections need to remain readable.
 - **0 / 1 / 5 tracks:** soundtrack card renders correctly in all three (0 shows "(this one was wordless)").
 - **Orphan key counter:** delete a song that's listed in `featuredTrackKeys` and confirm the soundtrack slide's `N/5` counter reflects only valid keys.
+- **Bonus tracks:** add one to a deck with 0 songs and to a deck already at 5 featured; confirm the first appears on the card immediately and the second lands in "add more" as disabled. Remove one and confirm it leaves both the pool and the featured list.
 - **Missing media on a section:** placeholder ★ appears, no broken image icon.
 
 ## Removed: Memory Orb
@@ -361,7 +370,7 @@ The hold-to-pause pointer handlers live on `.player` and bubble-receive every to
 | Change deploy / data flow | `.github/workflows/deploy.yml` + `useDataJsonLoader.ts` + `scripts/encrypt-data.mjs` |
 | Tweak spirit-animal slide visuals | `src/components/slides/SpiritAnimalSlideView.tsx` + `.keepsake-*` / `.spirit-section-*` rules in `global.css` |
 | Tweak soundtrack slide visuals | `src/components/slides/SoundtrackSlideView.tsx` + `.keepsake-*` / `.keepsake-track-*` rules in `global.css` |
-| Tweak the soundtrack list logic | `getSoundtrack()` / `getFeaturedSoundtrack()` in `src/utils/wrapped.ts` (dedupe, cap) |
+| Tweak the soundtrack list logic | `getSoundtrack()` / `getTrackPool()` / `getFeaturedSoundtrack()` in `src/utils/wrapped.ts` (dedupe, cap, bonus tracks) — all keyed by `trackKey()` |
 | Tweak the PNG export | `saveCardAsPng()` in `src/utils/wrapped.ts` (pixelRatio, filter, filename prefix) |
 | Add another title font | Add the family to `index.html` Google Fonts link → add a CSS variable + `.keepsake-title.font-X` rule in `global.css` → extend `TitleFontKind` in `types/index.ts` → add a button to `TitleFontPicker` in `SlideFieldsEditor.tsx` |
 | Edit spirit-animal data | The slide's own field editor (`SpiritAnimalFields`). Per-colleague spirit animal panel was removed — data now lives on the slide. |

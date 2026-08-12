@@ -37,6 +37,20 @@ function readPayload(payload: DeckPayload | Slide[]): DeckPayload {
   return Array.isArray(payload) ? { name: '', slides: payload } : payload;
 }
 
+/** Emoji, plus the modifiers that decorate them (skin tone, variation selector,
+ *  ZWJ, keycaps). Doesn't touch ASCII digits — `\p{Emoji}` would. */
+const EMOJI_RE =
+  /[\p{Extended_Pictographic}\u{1F3FB}-\u{1F3FF}\u{FE0F}\u{200D}\u{20E3}]/gu;
+
+/** Names in the deck often carry a personal emoji ("eugenia 🦫"). It reads as
+ *  clutter on the greeting screen, which has its own 🔊, so strip it there.
+ *  Display-only — the stored name keeps its emoji everywhere else. Falls back
+ *  to the raw name if it's nothing but emoji. */
+function greetingName(name: string): string {
+  const stripped = name.replace(EMOJI_RE, '').replace(/\s{2,}/g, ' ').trim();
+  return stripped || name;
+}
+
 interface Props {
   /** Deck id from the private `#/d/<id>` link, or null on a bare URL. */
   deckId: string | null;
@@ -210,7 +224,7 @@ export function Unlock({ deckId }: Props) {
             </>
           ) : canReplay ? (
             <>
-              <h3>Welcome back, {unlockedColleague?.name} 👋</h3>
+              <h3>Welcome back, {greetingName(unlockedColleague?.name ?? '')}</h3>
               <p>Your wrapped is still here.</p>
               <div className="pw-actions">
                 <button className="btn btn-primary" onClick={() => openPlayer(safeId)}>
@@ -220,7 +234,7 @@ export function Unlock({ deckId }: Props) {
             </>
           ) : (
             <>
-              <h3>This one's for you 💌</h3>
+              <h3>This one's for you</h3>
               <p>Enter the password I sent you.</p>
               <input
                 ref={inputRef}
@@ -243,7 +257,7 @@ export function Unlock({ deckId }: Props) {
                   onClick={() => void submit()}
                   disabled={busy || !value}
                 >
-                  {busy ? 'Unlocking…' : 'Unlock'}
+                  {busy ? 'Unlocking…' : "Let's go"}
                 </button>
               </div>
             </>
@@ -257,7 +271,7 @@ export function Unlock({ deckId }: Props) {
         <div id="volume-hint-overlay" onClick={handleGreetDismiss}>
           <div className="volume-hint-inner">
             <div className="volume-hint-icon">🔊</div>
-            <div className="volume-hint-text">Hi, {greetName} 👋</div>
+            <div className="volume-hint-text">Hi, {greetingName(greetName)}</div>
             <div className="volume-hint-sub">
               Turn your volume up, then tap anywhere to start.
             </div>

@@ -21,7 +21,7 @@ export function SoundtrackSlideView({ slide, colleague }: Props) {
   const cardRef = useRef<HTMLDivElement>(null);
   const [saveState, setSaveState] = useState<SaveState>('idle');
 
-  const tracks = getFeaturedSoundtrack(colleague, slide.featuredTrackKeys);
+  const tracks = getFeaturedSoundtrack(colleague, slide);
   const eyebrow = slide.eyebrow || 'your soundtrack';
   const title = slide.title?.trim() ? slide.title : '';
   const titleClass = `keepsake-title${slide.titleFont === 'spotify' ? ' font-spotify' : ''}`;

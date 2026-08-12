@@ -1,5 +1,5 @@
 import { toPng } from 'html-to-image';
-import type { Colleague } from '../types';
+import type { Colleague, SoundtrackSlide } from '../types';
 
 /** Spotify Wrapped tops out at 5 — match that for visual rhythm and to keep
  *  the keepsake card from overflowing on a 9:16 frame. */
@@ -11,6 +11,15 @@ export interface SoundtrackTrack {
   art: string;
   /** Stable dedupe + selection key. `name|artist`. */
   key: string;
+  /** True for a track added directly to the slide rather than derived from a
+   *  slide's song. Only the admin picker cares — the card renders both alike. */
+  isExtra?: boolean;
+}
+
+/** The one place the selection key is built. Deck songs and extra tracks must
+ *  agree on this or `featuredTrackKeys` silently drops entries. */
+export function trackKey(name: string, artist: string): string {
+  return `${name}|${artist}`;
 }
 
 /** Every slide with a song, deduped by name+artist. Same song on two slides
@@ -23,7 +32,7 @@ export function getSoundtrack(colleague: Colleague): SoundtrackTrack[] {
     if (!s.songUrl || !s.songName) continue;
     const name = s.songName;
     const artist = s.songArtist ?? '';
-    const key = `${name}|${artist}`;
+    const key = trackKey(name, artist);
     if (seen.has(key)) continue;
     seen.add(key);
     out.push({ name, artist, art: s.songArt ?? '', key });
@@ -31,24 +40,44 @@ export function getSoundtrack(colleague: Colleague): SoundtrackTrack[] {
   return out;
 }
 
-/** Apply the wrapped-finale's curation to the full soundtrack list:
- *  - `featuredKeys === undefined` → auto-pick first MAX_FEATURED_TRACKS in deck order
- *  - `featuredKeys === []` → user explicitly emptied the list (returns [])
- *  - non-empty → render in the order specified by `featuredKeys`, capped at
- *    MAX_FEATURED_TRACKS. Orphan keys (songs renamed/removed elsewhere) are
- *    silently skipped so the slide stays in sync with the live song list.
+/** Everything this slide can feature: the deck's songs in deck order, then the
+ *  slide's own extra tracks. A deck song wins any key collision, so adding an
+ *  extra that later gets used on a slide degrades gracefully into one entry. */
+export function getTrackPool(
+  colleague: Colleague,
+  slide: Pick<SoundtrackSlide, 'extraTracks'>,
+): SoundtrackTrack[] {
+  const out = getSoundtrack(colleague);
+  const seen = new Set(out.map((t) => t.key));
+  for (const e of slide.extraTracks ?? []) {
+    if (!e.name) continue;
+    const artist = e.artist ?? '';
+    const key = trackKey(e.name, artist);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push({ name: e.name, artist, art: e.art ?? '', key, isExtra: true });
+  }
+  return out;
+}
+
+/** Apply the slide's curation to its track pool:
+ *  - `featuredTrackKeys === undefined` → auto-pick the first MAX_FEATURED_TRACKS
+ *  - `featuredTrackKeys === []` → user explicitly emptied the list (returns [])
+ *  - non-empty → render in the order specified, capped at MAX_FEATURED_TRACKS.
+ *    Orphan keys (songs renamed/removed elsewhere, extras deleted) are silently
+ *    skipped so the slide stays in sync with the live pool.
  */
 export function getFeaturedSoundtrack(
   colleague: Colleague,
-  featuredKeys: string[] | undefined,
+  slide: Pick<SoundtrackSlide, 'extraTracks' | 'featuredTrackKeys'>,
 ): SoundtrackTrack[] {
-  const all = getSoundtrack(colleague);
-  if (featuredKeys === undefined) {
+  const all = getTrackPool(colleague, slide);
+  if (slide.featuredTrackKeys === undefined) {
     return all.slice(0, MAX_FEATURED_TRACKS);
   }
   const byKey = new Map(all.map((t) => [t.key, t]));
   const out: SoundtrackTrack[] = [];
-  for (const k of featuredKeys) {
+  for (const k of slide.featuredTrackKeys) {
     const t = byKey.get(k);
     if (t) out.push(t);
     if (out.length >= MAX_FEATURED_TRACKS) break;

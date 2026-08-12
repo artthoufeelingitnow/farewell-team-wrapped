@@ -4,6 +4,9 @@
     /* Geometric bold sans for "Spotify Wrapped" styled titles. Montserrat 900
        is closest to Circular without paying for the real thing. */
     --font-spotify: 'Montserrat', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+    /* The accent already used for focus rings and admin highlights. */
+    --gold: #FFC75F;
+    --gold-dim: rgba(255, 199, 95, 0.45);
   }
   * { margin: 0; padding: 0; box-sizing: border-box; }
   html, body { height: 100%; font-family: var(--font-body); -webkit-font-smoothing: antialiased; }
@@ -221,14 +224,21 @@
      .pw-* input/error/action styles with the old password modal.
      ============================================================ */
   .unlock-card {
-    background: linear-gradient(135deg, #1a0a2e 0%, #0a0014 100%);
-    border: 1px solid rgba(255,255,255,0.15);
+    background: #000;
+    border: 1px solid var(--gold);
     border-radius: 24px;
     padding: 36px 28px;
     max-width: 380px;
     width: 100%;
     text-align: center;
-    box-shadow: 0 24px 60px rgba(0,0,0,0.45);
+    box-shadow: 0 24px 60px rgba(0,0,0,0.6);
+  }
+  /* Gold to match the card edge, brightening on focus. */
+  .unlock-card .pw-input {
+    border-color: var(--gold-dim);
+  }
+  .unlock-card .pw-input:focus {
+    border-color: var(--gold);
   }
   .unlock-card h3 {
     font-family: var(--font-display);
@@ -321,6 +331,44 @@
     overflow-wrap: anywhere;
   }
   .deck-link-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+  /* Marks a soundtrack track that lives on the slide rather than on a deck
+     slide's song field. Admin picker only — never rendered on the card. */
+  .wrapped-track-badge {
+    flex: none;
+    font-size: 9px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: rgba(255,199,95,0.9);
+    border: 1px solid rgba(255,199,95,0.35);
+    border-radius: 999px;
+    padding: 2px 7px;
+    margin-left: 6px;
+  }
+  /* Sits beside the ↑↓ stack rather than inside it — a third button in that
+     column overflows the row's height. */
+  .wrapped-track-remove {
+    flex: none;
+    width: 22px;
+    height: 22px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-left: 6px;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 4px;
+    color: rgba(255, 255, 255, 0.75);
+    font-size: 14px;
+    line-height: 1;
+    padding: 0;
+    cursor: pointer;
+  }
+  .wrapped-track-remove:hover {
+    background: rgba(255, 107, 107, 0.25);
+    border-color: rgba(255, 107, 107, 0.5);
+    color: #fff;
+  }
 
   /* ============================================================
      COMMON BUTTONS

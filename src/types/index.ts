@@ -223,6 +223,17 @@ export interface SpiritAnimalSlide extends SlideBase {
   caption?: string;
 }
 
+/** A song featured on the soundtrack card that isn't attached to any slide in
+ *  the deck — a track that belongs on their list but never scored a slide.
+ *  Keyed the same way as deck songs (`name|artist`) so it can sit in
+ *  `featuredTrackKeys` alongside them, in any order. */
+export interface ExtraTrack {
+  name: string;
+  artist?: string;
+  /** Artwork URL, from the iTunes search result that added it. */
+  art?: string;
+}
+
 /** Soundtrack keepsake card: user-customizable title + the deck's track list. */
 export interface SoundtrackSlide extends SlideBase {
   type: 'soundtrack';
@@ -233,9 +244,12 @@ export interface SoundtrackSlide extends SlideBase {
   title?: string;
   /** Font style for the title. */
   titleFont?: TitleFontKind;
-  /** Curated subset of soundtrack tracks. Each entry is a `name|artist` key
-   *  matching `getSoundtrack()`'s dedupe. Capped at 5. `undefined` = auto-pick. */
+  /** Curated subset of the track pool — deck songs plus `extraTracks`. Each
+   *  entry is a `name|artist` key matching `trackKey()`. Capped at 5, rendered
+   *  in this order. `undefined` = auto-pick the first 5 of the pool. */
   featuredTrackKeys?: string[];
+  /** Songs featured on this card that aren't on any slide in the deck. */
+  extraTracks?: ExtraTrack[];
   /** Optional italic tagline rendered at the bottom of the card. */
   tagline?: string;
 }

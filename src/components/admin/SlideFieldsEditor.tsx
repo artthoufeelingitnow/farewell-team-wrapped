@@ -12,9 +12,12 @@ import type {
   MemeSlide,
   TitleFontKind,
   Colleague,
+  ItunesResult,
 } from '../../types';
 import { readFileAsDataURL, compressImage } from '../../utils';
-import { getSoundtrack, MAX_FEATURED_TRACKS } from '../../utils/wrapped';
+import { getTrackPool, trackKey, MAX_FEATURED_TRACKS } from '../../utils/wrapped';
+import { useItunesSearch } from '../../hooks/useItunesSearch';
+import { showToast } from '../../store/toastStore';
 
 interface Props {
   slide: Slide;
@@ -407,14 +410,19 @@ function SoundtrackFields({
   colleague: Colleague;
   onPatch: (patch: Partial<Slide>) => void;
 }) {
-  const allSongs = getSoundtrack(colleague);
+  const [extraQuery, setExtraQuery] = useState('');
+  const { results: extraResults, searching: extraSearching } = useItunesSearch(extraQuery);
+
+  // The pool is the deck's songs plus this slide's own extra tracks — songs
+  // that belong on the card but never scored a slide.
+  const allSongs = getTrackPool(colleague, slide);
   const allKeys = new Set(allSongs.map((t) => t.key));
   // `undefined` means "auto-pick first 5". As soon as the user touches the
   // picker we materialize that auto pick into a concrete array so toggles read
   // intuitively (everything pre-selected, click to opt out).
-  // Stored keys are also filtered against the current song list — orphaned
-  // keys (from songs that were renamed or removed elsewhere in the deck) get
-  // pruned so the "N/5" counter stays accurate.
+  // Stored keys are also filtered against the current pool — orphaned
+  // keys (from songs that were renamed or removed elsewhere in the deck, or
+  // extras that were deleted) get pruned so the "N/5" counter stays accurate.
   const stored = slide.featuredTrackKeys?.filter((k) => allKeys.has(k));
   const featured = stored ?? allSongs.slice(0, MAX_FEATURED_TRACKS).map((t) => t.key);
   const featuredSet = new Set(featured);
@@ -445,6 +453,38 @@ function SoundtrackFields({
   const resetToAuto = () => onPatch({ featuredTrackKeys: undefined });
 
   const isAuto = slide.featuredTrackKeys === undefined;
+
+  /** Add a song that isn't on any slide. Stored on the slide itself, and
+   *  featured immediately unless the list is already full — otherwise you'd
+   *  add a track and see nothing change on the card. */
+  const addExtra = (r: ItunesResult) => {
+    const name = r.trackName?.trim();
+    if (!name) return;
+    const artist = r.artistName?.trim() ?? '';
+    const key = trackKey(name, artist);
+    if (allKeys.has(key)) {
+      showToast('That song is already on the list');
+      return;
+    }
+    const patch: Partial<SoundtrackSlide> = {
+      extraTracks: [...(slide.extraTracks ?? []), { name, artist, art: r.artworkUrl100 ?? r.artworkUrl60 }],
+    };
+    if (featured.length < MAX_FEATURED_TRACKS) patch.featuredTrackKeys = [...featured, key];
+    onPatch(patch);
+    setExtraQuery('');
+  };
+
+  const removeExtra = (key: string) => {
+    const patch: Partial<SoundtrackSlide> = {
+      extraTracks: (slide.extraTracks ?? []).filter(
+        (t) => trackKey(t.name, t.artist ?? '') !== key,
+      ),
+    };
+    // Only touch the featured list if it's already explicit — dropping an extra
+    // shouldn't silently freeze an auto-pick into a fixed list.
+    if (!isAuto) patch.featuredTrackKeys = featured.filter((k) => k !== key);
+    onPatch(patch);
+  };
 
   // Map for key → track lookup. Featured rows render in `featured` order
   // (user-chosen sequence), unfeatured rows fall back to deck order via
@@ -487,7 +527,8 @@ function SoundtrackFields({
 
       {allSongs.length === 0 ? (
         <div className="full" style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)', fontStyle: 'italic' }}>
-          No songs on any slides yet. Add a song to a slide and it'll appear here.
+          No songs on any slides yet. Add a song to a slide — or search below to
+          feature one that isn't in the deck.
         </div>
       ) : (
         <div className="full">
@@ -525,6 +566,7 @@ function SoundtrackFields({
                   <div className="wrapped-track-row-name">{t.name}</div>
                   {t.artist && <div className="wrapped-track-row-artist">{t.artist}</div>}
                 </div>
+                {t.isExtra && <span className="wrapped-track-badge" title="Not on any slide in this deck">bonus</span>}
                 <div className="wrapped-track-row-reorder">
                   <button
                     type="button"
@@ -539,6 +581,14 @@ function SoundtrackFields({
                     title="Move down"
                   >↓</button>
                 </div>
+                {t.isExtra && (
+                  <button
+                    type="button"
+                    className="wrapped-track-remove"
+                    onClick={(e) => { e.stopPropagation(); e.preventDefault(); removeExtra(t.key); }}
+                    title="Remove this bonus song"
+                  >×</button>
+                )}
               </label>
             ))}
 
@@ -568,12 +618,59 @@ function SoundtrackFields({
                     <div className="wrapped-track-row-name">{t.name}</div>
                     {t.artist && <div className="wrapped-track-row-artist">{t.artist}</div>}
                   </div>
+                  {t.isExtra && (
+                    <>
+                      <span className="wrapped-track-badge" title="Not on any slide in this deck">bonus</span>
+                      <button
+                        type="button"
+                        className="wrapped-track-remove"
+                        onClick={(e) => { e.stopPropagation(); e.preventDefault(); removeExtra(t.key); }}
+                        title="Remove this bonus song"
+                      >×</button>
+                    </>
+                  )}
                 </label>
               );
             })}
           </div>
         </div>
       )}
+
+      {/* Feature a song that isn't on any slide. It lives on this slide only —
+          it gets no preview audio and doesn't affect playback anywhere. */}
+      <div className="full">
+        <label className="field-label">Add a song that isn't in the deck</label>
+        <div className="song-search-row">
+          <input
+            type="text"
+            value={extraQuery}
+            placeholder="Search iTunes for a bonus track…"
+            onChange={(e) => setExtraQuery(e.target.value)}
+          />
+          {extraQuery && (
+            <button type="button" className="btn btn-sm btn-ghost" onClick={() => setExtraQuery('')}>
+              clear
+            </button>
+          )}
+        </div>
+        {extraQuery.trim() !== '' && (
+          <div className="song-results">
+            {extraSearching && <div className="song-loading">Searching iTunes…</div>}
+            {!extraSearching && extraResults.length === 0 && (
+              <div className="song-loading">No results.</div>
+            )}
+            {extraResults.map((r, ri) => (
+              <div key={ri} className="song-result" onClick={() => addExtra(r)}>
+                {r.artworkUrl60 && <img src={r.artworkUrl60} alt="" />}
+                <div className="song-result-info">
+                  <div className="song-result-title">{r.trackName}</div>
+                  <div className="song-result-artist">{r.artistName}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
