@@ -28,8 +28,10 @@ farewell_wrapped/
 ├── docs/                   # design briefs (MEMORY_ORB_BRIEF.md, SPIRIT_ANIMAL_BRIEF.md)
 ├── data/                   # COMMITTED encrypted artifacts — produced by `npm run encrypt-data`
 │   ├── index.json          #   public: meta ONLY. No names, no ids, no roster.
-│   └── colleagues/         #   per-colleague AES-GCM blobs, key = each colleague's plaintext password
-│       └── <id>.json.enc   #   payload = { name, category?, slides }
+│   ├── colleagues/         #   per-colleague AES-GCM blobs, key = each colleague's plaintext password
+│   │   └── <id>.json.enc   #   payload = { name, category?, slides }
+│   └── lookup/             #   password → deck id, for entry without a link
+│       └── <digest>.json   #   { id }. Filename = PBKDF2(password), 600k iters
 ├── data.json               # gitignored. Admin source-of-truth (plaintext passwords on each colleague)
 ├── scripts/encrypt-data.mjs # data.json → data/index.json + data/colleagues/*.json.enc (Node WebCrypto)
 ├── CLAUDE.md               # ← you are here. MUST stay at root for tools to load it.
@@ -54,8 +56,8 @@ farewell_wrapped/
 
 | Route | View | Who sees it |
 |---|---|---|
-| `#/d/<id>` | **Unlock** (password box) | A colleague following their private link |
-| `#` (default) | **Unlock** ("you need your own link") | Anyone who found the bare URL |
+| `#/d/<id>` | **Unlock** (password box, deck pinned by the link) | A colleague following their private link |
+| `#` (default) | **Unlock** (password box, deck found *from* the password) | Someone who has their password but not their link |
 | `#admin` | **Admin tool** | Michael only — build/edit decks |
 | (in-app, once a deck is unlocked) | **Player** | Visitors after decrypt |
 
@@ -158,7 +160,10 @@ Each slide type has its own view component in `src/components/slides/` and gets 
 On boot:
 1. `appStore` kicks off an async read from **IndexedDB** at module load (`src/utils/storage.ts`; a one-time migration lifts the legacy `goodbye_wrapped_data_v1` localStorage key if it's still around). `isHydrated` flips true when it resolves. `migrateAppData()` runs on every load — coerces legacy shapes (string `bg`, `{kind:'preset'}` bg unchanged, mosaic `photos[]` → `media[]`, single fragment `dataUrl` → `dataUrls[]`, **`'orb-finale'` and `'wrapped-finale'` slides → `[spirit-animal, soundtrack]` pair** with bg/fragments/song fields preserved on the spirit-animal slide and the legacy colleague-level spirit animal data lifted onto its left section). Migration also DROPS the legacy `passwordHash` field — it's no longer used; admin shows "(needed for encryption)" until the user enters a plaintext `password`.
 2. `useDataJsonLoader` async-fetches `${BASE_URL}data/index.json`. If it returns 200 with valid JSON, calls `loadIndex()` which **replaces** the store with meta and an **empty** colleague list. Marks `isExportedFile: true` — that flag is also what tells `Unlock` to take the fetch-and-decrypt path instead of the admin-draft path.
-3. On submit, `Unlock` fetches `${BASE_URL}data/colleagues/<id>.json.enc` (id from the `#/d/<id>` link) and runs `decryptJson(blob, enteredPassword)` (AES-GCM via WebCrypto). Auth-tag mismatch surfaces as `WrongPasswordError`. On success, `loadDeck()` inserts the colleague, and the "Hi, &lt;name&gt;" overlay's tap opens the player (that tap is also the user gesture that unblocks audio autoplay).
+3. On submit, `Unlock` needs a deck id. The `#/d/<id>` link supplies one directly. **Without a link** it derives one: `deriveLookupDigest(password)` (PBKDF2-SHA256, 600k iters, fixed site salt) → fetch `data/lookup/<digest>.json` → `{ id }`. A 404 there is the wrong-password case.
+4. With an id in hand it fetches `${BASE_URL}data/colleagues/<id>.json.enc` and runs `decryptJson(blob, enteredPassword)` (AES-GCM via WebCrypto). Auth-tag mismatch surfaces as `WrongPasswordError`. On success, `loadDeck()` inserts the colleague, and the "Hi, &lt;name&gt;" overlay's tap opens the player (that tap is also the user gesture that unblocks audio autoplay).
+
+The link **pins** the deck: entering someone else's (valid) password against your link fails rather than opening their deck. The lookup path only runs when there's no id at all.
 
 So in production, the index file always wins over a viewer's stale local data; a colleague's deck only lands in memory after a successful decrypt and is never persisted (refresh re-prompts).
 
@@ -305,31 +310,36 @@ The 30s clip Apple returns always starts at the same point (usually the chorus).
 ### 4. Songs need internet at view time
 Song URLs reference Apple's CDN. Colleagues must be online when viewing.
 
-### 5. What the private link does and doesn't hide
-The link (`#/d/<id>`) is a *locator*, not a credential — the password is the credential. Anyone holding a link still needs the password. But note the limits of the roster hiding:
+### 5. Password-only entry and its trade-off
+`data/lookup/<digest>.json` lets someone with only their password find their deck (they bookmarked the old landing page, or lost the link). The digest is PBKDF2-SHA256 at the same 600k iterations as the deck key, so a guess costs the same as attacking a blob directly, and the file contains only an id — no name.
+
+The salt **has to be fixed** (`LOOKUP_SALT`, duplicated in `src/utils/crypto.ts` and `scripts/encrypt-data.mjs`) because the point is finding the deck before you know whose it is. Consequence: one PBKDF2 run tests a candidate password against *every* deck at once, rather than one run per deck. With a handful of decks that's a small constant factor, but it does mean password entropy is now the only thing standing between a guesser and *somebody's* deck — before, they also had to pick the right id. Don't reuse a password across two colleagues; `encrypt-data` warns if you do, since the lookup file would collide.
+
+### 6. What the private link does and doesn't hide
+The link (`#/d/<id>`) is a *locator*, not a credential — the password is the credential. Anyone holding a link still needs the password. The link also **pins** the deck: a valid password for a different colleague won't open their deck through your link. Limits of the roster hiding:
 - **The public repo lists the blob filenames.** Anyone browsing `data/colleagues/` on GitHub sees N opaque ids, so the *count* of decks is visible. The names are not.
 - **The hash fragment never reaches the server**, so the id doesn't appear in GH Pages logs or Referer headers — but it does appear in the recipient's browser history and in any screenshot of the URL bar.
 - Blob sizes differ, so file listings leak rough deck sizes. Nothing identifying.
 
-### 6. Password security
+### 7. Password security
 Each colleague's deck is real AES-GCM encrypted with their own password (PBKDF2-SHA256 600k iters). The encrypted blob is what ships to GitHub; the slides only exist in plaintext server-side as the gitignored `data.json` and client-side after a successful decrypt. Still: a determined attacker who guesses the password gets the deck, and the password DOES travel through your laptop's localStorage (admin source-of-truth). Don't pick passwords that would be catastrophic if cracked, and don't share `data.json`.
 
-### 7. Transient admin state in slides
+### 8. Transient admin state in slides
 Admin-only fields leak into `slide` objects: `showSongPicker`, `songSearchQuery`, etc. `cleanColleagueForExport()` strips them. Add new transient fields to `TRANSIENT_FIELDS` in `src/utils/index.ts`.
 
-### 8. WebCrypto parameters must match across encrypt + decrypt
-`PBKDF2_ITERATIONS = 600_000`, `SALT_BYTES = 16`, `IV_BYTES = 12`, `AES-GCM-256` are duplicated in `src/utils/crypto.ts` (browser) and `scripts/encrypt-data.mjs` (Node). Change one without the other and every existing `.json.enc` becomes undecryptable. Bump the `v` field in the blob format if you ever need to do this — both sides reject mismatched versions.
+### 9. WebCrypto parameters must match across encrypt + decrypt
+`PBKDF2_ITERATIONS = 600_000`, `SALT_BYTES = 16`, `IV_BYTES = 12`, `AES-GCM-256` and `LOOKUP_SALT` are duplicated in `src/utils/crypto.ts` (browser) and `scripts/encrypt-data.mjs` (Node). Change one without the other and every existing `.json.enc` becomes undecryptable — or, for `LOOKUP_SALT`, password-only entry silently 404s for everyone while the link path keeps working (an easy one to miss). Bump the `v` field in the blob format if you ever need to change the cipher params; both sides reject mismatched versions.
 
-### 9. Don't commit data.json (plaintext, includes plaintext passwords)
+### 10. Don't commit data.json (plaintext, includes plaintext passwords)
 It's in `.gitignore`. The committed artifacts are `data/index.json` (public) + `data/colleagues/*.json.enc` (encrypted).
 
-### 10. Vite base path mismatches
+### 11. Vite base path mismatches
 If you rename the GH Pages repo or switch to a custom domain, update `base` in `vite.config.ts`.
 
-### 11. StrictMode double-render
+### 12. StrictMode double-render
 React 19 + StrictMode runs effects twice in dev. The audio engine's URL-match guard makes it idempotent; new module-level state must tolerate double-firing.
 
-### 12. The `:not()` content-layering rule
+### 13. The `:not()` content-layering rule
 `src/styles/global.css` has:
 ```css
 .slide > *:not(.fragment-layer):not(.slide-bg):not(.photo-lightbox):not(.photo-mosaic):not(.quote-mark):not(.keepsake) {
@@ -339,19 +349,19 @@ React 19 + StrictMode runs effects twice in dev. The audio engine's URL-match gu
 ```
 This applies `position: relative; z-index: 2` to every direct child of `.slide`, *except* the listed exclusions. Anything that needs to be `position: absolute` (lightbox overlays, full-bleed children, the keepsake shell) must be added to the exclusion list — otherwise its layout breaks silently. Specificity is (0,6,0), so a per-class override needs equal-or-higher specificity to win.
 
-### 13. .mov files don't play reliably outside Safari
+### 14. .mov files don't play reliably outside Safari
 iPhone-recorded `.mov` (HEVC/H.265) plays in Safari but breaks in Chrome/Firefox. Always re-encode to `.mp4` (H.264) with the ffmpeg one-liner above.
 
-### 14. html-to-image + web fonts
+### 15. html-to-image + web fonts
 `html-to-image` will silently fall back to system fonts if the page's web fonts aren't fully loaded at capture time. `saveCardAsPng()` awaits `document.fonts.ready` first, but if a font is added after capture (rare), it can still miss. Test PNG export on a cold cache (private window) before shipping any change to the keepsake slides' typography.
 
-### 15. Mosaic edge-photo taps register as nav
+### 16. Mosaic edge-photo taps register as nav
 Player has 30%-wide `nav-zone` overlays at left/right (z-index 4). Mosaic photos sit at `z-index: 7` so taps land on the photo. Critical that `.photo-mosaic` does NOT form a stacking context (it's in the `:not()` exclusion list — keeps the inner `<img>`/`<video>` z-index propagating to the player's stacking context). The `.letter-wrap` is in the same exclusion list at `z-index: 7` for the same reason — without it, only the middle 40% of a long letter is actually scrollable because the side nav-zones cover the rest.
 
-### 16. `navigator.share({ files })` only works in real browsers
+### 17. `navigator.share({ files })` only works in real browsers
 The keepsake save flow opens the OS share sheet (→ "Save to Photos" / "Save to Gallery") only when the browser supports Web Share with files. **In-app browsers** (Instagram, Facebook, Slack, Gmail link previews, etc.) usually return `false` from `navigator.canShare({ files })`, so the user falls through to the download path. There is no zero-tap "save to gallery" available on the open web — even when the share sheet works, the user still taps "Save Image" once. If a colleague reports the file going to Downloads instead of Photos, they're almost certainly opening the link inside an app, not Safari/Chrome.
 
-### 17. Hold-to-pause vs scroll containers
+### 18. Hold-to-pause vs scroll containers
 The hold-to-pause pointer handlers live on `.player` and bubble-receive every touch. The `HOLD_MOVE_THRESHOLD_PX` of 8px cancels the timer once the user starts scrolling — that's why letter-wrap scrolling works without accidentally triggering pause. If you add a new scrollable region, make sure its `touch-action` permits the axis you want (`pan-y` for vertical) so the browser actually scrolls instead of fighting the pointer handler.
 
 ## Common tasks
@@ -393,7 +403,8 @@ npm run encrypt-data # data.json → data/index.json + data/colleagues/*.json.en
 
 - **The no-roster invariant.** `data/index.json` carries `meta` and nothing else, and no name, id, or count is published anywhere. Don't add a colleague list to the index, a name to the URL, or any view that enumerates people. The whole design exists so a visitor can't see who this was made for.
 - **Names live inside the ciphertext** (`DeckPayload.name`). Moving a name back out to a public file re-breaks the above.
-- **Identical failure messages** in `Unlock.tsx` — separate "no such deck" / "wrong password" errors would make the id space probeable.
+- **Identical failure messages** in `Unlock.tsx` — separate "no such deck" / "wrong password" / "no lookup match" errors would make the id space probeable.
+- **`LOOKUP_SALT` and the 600k iterations on the lookup digest.** Dropping the iteration count to make password-only entry feel snappier would turn `data/lookup/` into a cheaply brute-forceable list of password hashes.
 - The decrypt-to-unlock gate (no `passwordHash` field anymore — gating IS the AES-GCM auth-tag check; if you bring back a hash field, also bring back the bypass it represents)
 - `DECK_ID_RE` validation before a deck id reaches a fetch URL — it's what stops `#/d/../../whatever`
 - The encrypted-blob deploy invariant (`data.json` gitignored — contains plaintext passwords; only `data/index.json` + `data/colleagues/*.json.enc` are committed)

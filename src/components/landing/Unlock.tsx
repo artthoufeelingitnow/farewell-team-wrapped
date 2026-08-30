@@ -2,7 +2,12 @@ import { useEffect, useRef, useState } from 'react';
 import { useAppStore } from '../../store/appStore';
 import { usePlayerStore } from '../../store/playerStore';
 import type { DeckPayload, LavaBg, Slide } from '../../types';
-import { decryptJson, WrongPasswordError, type EncryptedBlob } from '../../utils/crypto';
+import {
+  decryptJson,
+  deriveLookupDigest,
+  WrongPasswordError,
+  type EncryptedBlob,
+} from '../../utils/crypto';
 import { preloadColleagueAssets } from '../../utils/preload';
 import { isValidDeckId } from '../../utils/links';
 import { SlideBackground } from '../slides/SlideBackground';
@@ -69,6 +74,9 @@ export function Unlock({ deckId }: Props) {
   const [shake, setShake] = useState(false);
   /** Non-null once decrypted — drives the "Hi, <name>" beat before the deck. */
   const [greetName, setGreetName] = useState<string | null>(null);
+  /** The deck we actually unlocked. Same as the route's id when a link was
+   *  used; resolved from the password when the visitor arrived without one. */
+  const [openedId, setOpenedId] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   // Re-validate here rather than trusting the prop: this component is the only
@@ -77,18 +85,27 @@ export function Unlock({ deckId }: Props) {
   const validId = safeId !== null;
   // Already unlocked this session (they closed the player and came back)? The
   // deck is still in memory, so offer a replay instead of the password box.
+  // Which deck (if any) is already unlocked and sitting in memory. Read from the
+  // store, not local state: this component unmounts while the player is open, so
+  // anything held in a useState is gone by the time they close it. With a link
+  // we require the id to match; without one — the password-only visitor — the
+  // single decrypted deck in the store is by definition theirs.
   const unlockedColleague = useAppStore((s) =>
-    safeId !== null && unlockedIds.has(safeId)
-      ? s.data.colleagues.find((c) => c.id === safeId)
-      : undefined,
+    s.data.colleagues.find(
+      (c) =>
+        unlockedIds.has(c.id) &&
+        c.slides.length > 0 &&
+        (safeId === null || c.id === safeId),
+    ),
   );
-  const canReplay = !!unlockedColleague && unlockedColleague.slides.length > 0;
+  const canReplay = !!unlockedColleague;
+  const replayId = unlockedColleague?.id ?? null;
 
   useEffect(() => {
-    if (!validId || canReplay) return;
+    if (canReplay) return;
     const t = setTimeout(() => inputRef.current?.focus(), 50);
     return () => clearTimeout(t);
-  }, [validId, canReplay]);
+  }, [canReplay]);
 
   // Hidden admin entry: type "admin". Buffer accumulates matching characters in
   // order; any mismatch resets it, and idle >1.5s resets it too. Skips when an
@@ -141,20 +158,39 @@ export function Unlock({ deckId }: Props) {
   /** Shared tail for both unlock paths: mark, preload, greet. */
   const enter = (id: string, name: string) => {
     markUnlocked(id);
+    setOpenedId(id);
     const latest = useAppStore.getState().data.colleagues.find((c) => c.id === id);
     if (latest) preloadColleagueAssets(latest);
     setGreetName(name);
   };
 
+  /** Password-only entry, for anyone who has their password but not their
+   *  private link (they bookmarked the old landing page, say). Derives the same
+   *  slow digest `encrypt-data` used to name the lookup file. A 404 is the
+   *  wrong-password case and is reported identically. */
+  const resolveIdFromPassword = async (password: string): Promise<string | null> => {
+    const digest = await deriveLookupDigest(password);
+    const res = await fetch(`${import.meta.env.BASE_URL}data/lookup/${digest}.json`, {
+      cache: 'no-store',
+    });
+    if (!res.ok) return null;
+    const body = (await res.json()) as { id?: unknown };
+    return typeof body.id === 'string' && isValidDeckId(body.id) ? body.id : null;
+  };
+
   const submit = async () => {
-    if (safeId === null || !value || busy) return;
+    if (!value || busy) return;
     setError('');
     setBusy(true);
     try {
       // Admin / dev path: no published data tree to fetch from, so the deck is
-      // already in memory from IndexedDB. Compare the stored plaintext.
+      // already in memory from IndexedDB. Compare the stored plaintext. Without
+      // a link, match on the password alone.
       if (!isExportedFile) {
-        const local = useAppStore.getState().data.colleagues.find((c) => c.id === safeId);
+        const all = useAppStore.getState().data.colleagues;
+        const local = safeId !== null
+          ? all.find((c) => c.id === safeId)
+          : all.find((c) => c.password && c.password === value);
         if (local && value === local.password && local.slides.length > 0) {
           enter(local.id, local.name);
         } else {
@@ -163,10 +199,17 @@ export function Unlock({ deckId }: Props) {
         return;
       }
 
-      // Viewer path: fetch this colleague's encrypted deck and try to decrypt
-      // with the entered password. AES-GCM throws on auth-tag mismatch, which
-      // IS the authentication check — there's no hash to compare against.
-      const url = `${import.meta.env.BASE_URL}data/colleagues/${safeId}.json.enc`;
+      // Which deck? The link tells us; without one, the password does.
+      const id = safeId ?? (await resolveIdFromPassword(value));
+      if (id === null) {
+        fail();
+        return;
+      }
+
+      // Fetch the encrypted deck and try to decrypt with the entered password.
+      // AES-GCM throws on auth-tag mismatch, which IS the authentication check —
+      // there's no hash to compare against.
+      const url = `${import.meta.env.BASE_URL}data/colleagues/${id}.json.enc`;
       const res = await fetch(url, { cache: 'no-store' });
       if (!res.ok) {
         // Almost always a 404 from a mistyped/unpublished link. Reported as the
@@ -178,12 +221,12 @@ export function Unlock({ deckId }: Props) {
       const blob = (await res.json()) as EncryptedBlob;
       const payload = readPayload(await decryptJson<DeckPayload | Slide[]>(blob, value));
       loadDeck({
-        id: safeId,
+        id,
         name: payload.name || 'you',
         category: payload.category,
         slides: payload.slides ?? [],
       });
-      enter(safeId, payload.name || 'you');
+      enter(id, payload.name || 'you');
     } catch (e) {
       if (e instanceof WrongPasswordError) {
         fail();
@@ -200,8 +243,9 @@ export function Unlock({ deckId }: Props) {
   // unblocks audio autoplay — that's why the player opens from here, not
   // straight after decrypt.
   const handleGreetDismiss = () => {
-    if (safeId === null) return;
-    openPlayer(safeId);
+    const id = openedId ?? safeId;
+    if (id === null) return;
+    openPlayer(id);
     setGreetName(null);
   };
 
@@ -214,28 +258,30 @@ export function Unlock({ deckId }: Props) {
             "Welcome back" state, and a ghost of it showing through the overlay
             spoils the beat. The lava background carries the moment alone. */}
         <div className="unlock-card" hidden={greetName !== null}>
-          {!validId ? (
-            <>
-              <h3>You'll need your own link 🔑</h3>
-              <p>
-                This page only opens with the personal link I sent you — check
-                that message and tap the link in it.
-              </p>
-            </>
-          ) : canReplay ? (
+          {canReplay ? (
             <>
               <h3>Welcome back, {greetingName(unlockedColleague?.name ?? '')}</h3>
               <p>Your wrapped is still here.</p>
               <div className="pw-actions">
-                <button className="btn btn-primary" onClick={() => openPlayer(safeId)}>
+                <button
+                  className="btn btn-primary"
+                  onClick={() => replayId !== null && openPlayer(replayId)}
+                >
                   Play again
                 </button>
               </div>
             </>
           ) : (
             <>
-              <h3>This one's for you</h3>
-              <p>Enter the password I sent you.</p>
+              {/* With a link we know a deck is waiting, so the copy can be
+                  warm and certain. Without one, lead with the action and point
+                  at the link as the fallback. */}
+              <h3>{validId ? "This one's for you" : 'Type in your password'}</h3>
+              <p>
+                {validId
+                  ? 'Enter the password I sent you.'
+                  : "Don't have one? Check if I sent you a link!"}
+              </p>
               <input
                 ref={inputRef}
                 type="password"

@@ -23,6 +23,17 @@ const PBKDF2_ITERATIONS = 600_000;
 const SALT_BYTES = 16;
 const IV_BYTES = 12;
 
+/** Fixed salt for the password → deck-id lookup. It has to be fixed (not per
+ *  colleague) because the whole point is finding the deck when we don't yet
+ *  know whose it is — there's no roster to look a per-user salt up in.
+ *
+ *  Trade-off: a fixed salt means one PBKDF2 run tests a candidate password
+ *  against every deck at once, instead of one run per deck. With a handful of
+ *  decks that's a small constant factor, and the 600k iterations still make
+ *  each guess as expensive as attacking a blob directly. Must stay byte-identical
+ *  to LOOKUP_SALT in scripts/encrypt-data.mjs. */
+const LOOKUP_SALT = new TextEncoder().encode('goodbye-wrapped/lookup/v1');
+
 function bytesToBase64(bytes: Uint8Array): string {
   let bin = '';
   for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
@@ -79,6 +90,31 @@ export async function encryptJson(plaintext: unknown, password: string): Promise
     iv: bytesToBase64(iv),
     ciphertext: bytesToBase64(new Uint8Array(ct)),
   };
+}
+
+/** Hex digest identifying which deck a password belongs to, without publishing
+ *  any roster. `encrypt-data` writes `data/lookup/<digest>.json` containing just
+ *  that colleague's id; the page derives the same digest from what's typed and
+ *  fetches it. A miss is a 404, which is indistinguishable from a wrong password.
+ *
+ *  This is a *locator*, not the key — the deck itself is still AES-GCM sealed
+ *  under the same password with its own random salt. */
+export async function deriveLookupDigest(password: string): Promise<string> {
+  const baseKey = await crypto.subtle.importKey(
+    'raw',
+    new TextEncoder().encode(password),
+    { name: 'PBKDF2' },
+    false,
+    ['deriveBits'],
+  );
+  const bits = await crypto.subtle.deriveBits(
+    { name: 'PBKDF2', salt: LOOKUP_SALT, iterations: PBKDF2_ITERATIONS, hash: 'SHA-256' },
+    baseKey,
+    256,
+  );
+  return Array.from(new Uint8Array(bits))
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('');
 }
 
 export class WrongPasswordError extends Error {

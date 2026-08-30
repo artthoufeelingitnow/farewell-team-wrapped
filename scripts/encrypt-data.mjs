@@ -8,9 +8,14 @@
  *                                     Payload is { name, category, slides } —
  *                                     the name lives inside the ciphertext so
  *                                     the roster is never published.
+ *   data/lookup/<digest>.json       — { id }. Filename is a 600k-iteration hash
+ *                                     of the password, so someone with only
+ *                                     their password (no link) can still find
+ *                                     their deck. Contains no name.
  *
- * There is no public list of colleagues anywhere: the only way into a deck is
- * the private `#/d/<id>` link (printed below) plus that person's password.
+ * There is no public list of colleagues anywhere. Two ways in, both requiring
+ * the password: the private `#/d/<id>` link (printed below), or the password
+ * alone via the lookup digest.
  *
  * Format must stay in sync with src/utils/crypto.ts. Both sides use WebCrypto
  * (Node ≥ 19 exposes globalThis.crypto).
@@ -27,6 +32,10 @@ const PBKDF2_ITERATIONS = 600_000;
 const SALT_BYTES = 16;
 const IV_BYTES = 12;
 
+/** Must stay byte-identical to LOOKUP_SALT in src/utils/crypto.ts — see the
+ *  comment there for why this one is fixed rather than per colleague. */
+const LOOKUP_SALT = new TextEncoder().encode('goodbye-wrapped/lookup/v1');
+
 /** Mirrors SITE_URL in src/utils/links.ts and `base` in vite.config.ts —
  *  change all three together if the deploy target ever moves. */
 const SITE_URL = 'https://artthoufeelingitnow.github.io/farewell-team-wrapped/';
@@ -38,6 +47,7 @@ const SRC_FILE = join(REPO_ROOT, 'data.json');
 const OUT_DIR = join(REPO_ROOT, 'data');
 const OUT_INDEX = join(OUT_DIR, 'index.json');
 const OUT_COLLEAGUES = join(OUT_DIR, 'colleagues');
+const OUT_LOOKUP = join(OUT_DIR, 'lookup');
 
 function bytesToBase64(bytes) {
   return Buffer.from(bytes).toString('base64');
@@ -74,6 +84,25 @@ async function encryptJson(plaintext, password) {
   };
 }
 
+/** Hex digest that maps a password back to its deck id, so someone who only has
+ *  the password (no private link) can still get in. Mirrors deriveLookupDigest()
+ *  in src/utils/crypto.ts — both must agree or the lookup silently 404s. */
+async function deriveLookupDigest(password) {
+  const baseKey = await crypto.subtle.importKey(
+    'raw',
+    new TextEncoder().encode(password),
+    { name: 'PBKDF2' },
+    false,
+    ['deriveBits'],
+  );
+  const bits = await crypto.subtle.deriveBits(
+    { name: 'PBKDF2', salt: LOOKUP_SALT, iterations: PBKDF2_ITERATIONS, hash: 'SHA-256' },
+    baseKey,
+    256,
+  );
+  return Buffer.from(new Uint8Array(bits)).toString('hex');
+}
+
 const TRANSIENT_SLIDE_FIELDS = [
   'showSongPicker',
   'songSearchQuery',
@@ -102,6 +131,7 @@ function main() {
   // .json.enc files behind.
   if (existsSync(OUT_DIR)) rmSync(OUT_DIR, { recursive: true, force: true });
   mkdirSync(OUT_COLLEAGUES, { recursive: true });
+  mkdirSync(OUT_LOOKUP, { recursive: true });
 
   const published = [];
   let skippedCount = 0;
@@ -138,6 +168,18 @@ function main() {
       };
       const blob = await encryptJson(payload, c.password);
       writeFileSync(join(OUT_COLLEAGUES, `${c.id}.json.enc`), JSON.stringify(blob));
+      // Password-only entry point, for anyone who has their password but not
+      // their link. The filename is a slow hash of the password; the contents
+      // are just the deck id. Nothing here names anybody.
+      const digest = await deriveLookupDigest(c.password);
+      const lookupPath = join(OUT_LOOKUP, `${digest}.json`);
+      if (existsSync(lookupPath)) {
+        console.warn(
+          `\u26a0 ${c.name} (${c.id}) shares a password with another colleague — ` +
+            `password-only entry will land on whichever was written first. Give them distinct passwords.`,
+        );
+      }
+      writeFileSync(lookupPath, JSON.stringify({ id: c.id }));
       published.push(c);
     }),
   ).then(() => {
@@ -153,7 +195,8 @@ function main() {
       console.log('\n(Passwords are in data.json — never commit or paste that file.)\n');
     }
     console.log(
-      `✓ Wrote data/index.json (meta only, no roster) + ${published.length} encrypted decks. Skipped: ${skippedCount}.`,
+      `✓ Wrote data/index.json (meta only, no roster) + ${published.length} encrypted decks` +
+        ` + ${published.length} password lookups. Skipped: ${skippedCount}.`,
     );
   });
 }
