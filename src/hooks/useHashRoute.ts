@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
-import { isValidDeckId } from '../utils/links';
+import { isValidDeckId, isValidGalleryToken } from '../utils/links';
 
 /**
- * Three destinations:
- *   ''          → landing  (no deck id — "you need your personal link")
- *   '#admin'    → admin
- *   '#/d/<id>'  → deck     (the private per-colleague link)
+ * Four destinations:
+ *   ''             → landing  (no deck id — "you need your personal link")
+ *   '#admin'       → admin
+ *   '#/d/<id>'     → deck     (the private per-colleague link)
+ *   '#/w/<token>'  → gallery  (the shared polaroid wall; the token is the key)
  *
  * A malformed or non-matching id falls back to `landing` rather than throwing,
  * so a mangled link degrades into the "check your link" screen instead of a
@@ -14,13 +15,18 @@ import { isValidDeckId } from '../utils/links';
 export type Route =
   | { kind: 'landing' }
   | { kind: 'admin' }
-  | { kind: 'deck'; id: string };
+  | { kind: 'deck'; id: string }
+  | { kind: 'gallery'; token: string };
 
 export function parseHash(hash: string): Route {
   const h = hash.replace(/^#/, '');
   if (h === 'admin') return { kind: 'admin' };
   const deck = /^\/?d\/([^/?#]+)$/.exec(h);
   if (deck && isValidDeckId(deck[1])) return { kind: 'deck', id: deck[1] };
+  // Same validate-before-it-can-reach-a-URL rule as deck ids: the token is
+  // hashed into a filename, so `#/w/../../x` must never get that far.
+  const wall = /^\/?w\/([^/?#]+)$/.exec(h);
+  if (wall && isValidGalleryToken(wall[1])) return { kind: 'gallery', token: wall[1] };
   return { kind: 'landing' };
 }
 
@@ -30,6 +36,8 @@ export function routeToHash(route: Route): string {
       return '#admin';
     case 'deck':
       return `#/d/${route.id}`;
+    case 'gallery':
+      return `#/w/${route.token}`;
     case 'landing':
       return '';
   }

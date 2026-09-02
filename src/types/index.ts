@@ -286,6 +286,9 @@ export type Slide =
  *  page); kept so the admin list stays organised and so old data still parses. */
 export type ColleagueCategory = 'trainer' | 'yfa';
 
+/** Which half of a spirit-animal slide fronts someone's polaroid on the wall. */
+export type GallerySide = 'left' | 'right';
+
 export interface Colleague {
   id: string;
   name: string;
@@ -300,6 +303,59 @@ export interface Colleague {
   /** When true, this deck is NOT published — `encrypt-data` writes no blob for
    *  them, so their link 404s. Use it for people whose deck isn't finished. */
   hidden?: boolean;
+  /** Featured on the shared polaroid wall. Strictly opt-in: existing in the
+   *  admin list is never enough to get published to the wall. Orthogonal to
+   *  `hidden` — a paused deck can still have its cat on the wall, and usually
+   *  should (that's the point of the wall for people mid-build). */
+  inGallery?: boolean;
+  /** Which section of their spirit-animal slide fronts the polaroid. 'left'
+   *  when unset. */
+  galleryCover?: GallerySide;
+  /** Someone who gets a polaroid but no wrapped deck — the colleagues you
+   *  weren't close enough with to build a whole deck for. They carry a single
+   *  spirit-animal slide and no password, so `encrypt-data` writes them no
+   *  deck blob and no password lookup. Reusing `Colleague` (rather than a
+   *  parallel type) means they get the whole spirit-animal field editor for
+   *  free — media upload, drag-to-crop, captions, font picker. */
+  galleryOnly?: boolean;
+}
+
+/** Admin-side config for the polaroid wall. Lives on `AppData` (and so in the
+ *  gitignored `data.json`), never in a committed artifact — `token` is a
+ *  credential. */
+export interface GalleryConfig {
+  /** High-entropy secret from `makeGalleryToken()`. It IS the AES-GCM key for
+   *  the wall's blob AND the seed for that blob's filename, so the link
+   *  `#/w/<token>` is the only credential — there's no password to type.
+   *  Rotating it invalidates every copy of the old link. */
+  token?: string;
+  /** Heading hung from the branch at the top of the wall. */
+  title?: string;
+  /** Optional line under the heading. */
+  note?: string;
+}
+
+/** One polaroid on the wall.
+ *
+ *  Deliberately carries NO colleague id. The wall is shared with a group, so
+ *  publishing ids inside it would hand every recipient the deck ids of the
+ *  featured people — enough to probe `data/colleagues/<id>.json.enc` and learn
+ *  exactly which of them also got a private wrapped deck. The card only ever
+ *  needs a name and the slide, so nothing else travels. */
+export interface GalleryEntry {
+  name: string;
+  cover: GallerySide;
+  /** Their spirit-animal card, lifted from their deck (or from the single
+   *  slide a gallery-only person carries). Song/fragment fields are stripped
+   *  at encrypt time — the wall plays no audio. */
+  slide: SpiritAnimalSlide;
+}
+
+/** Plaintext contents of `data/gallery/<digest>.json.enc`, post-decrypt. */
+export interface GalleryPayload {
+  title?: string;
+  note?: string;
+  entries: GalleryEntry[];
 }
 
 export interface AppMeta {
@@ -311,6 +367,9 @@ export interface AppMeta {
 export interface AppData {
   meta: AppMeta;
   colleagues: Colleague[];
+  /** Polaroid wall settings. Admin-side only — the token is a credential and
+   *  never reaches a committed artifact. */
+  gallery?: GalleryConfig;
 }
 
 /** Shape of `data/index.json` — the only file every visitor downloads.

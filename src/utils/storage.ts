@@ -1,4 +1,4 @@
-import type { AppData, Colleague } from '../types';
+import type { AppData, Colleague, GalleryConfig } from '../types';
 import { STORAGE_KEY } from './constants';
 
 /**
@@ -10,7 +10,7 @@ import { STORAGE_KEY } from './constants';
  * being a concern at any realistic deck size.
  *
  * Schema: a single `kv` object store keyed by string.
- *   - `'meta'` → { meta: AppData['meta'], colleagueIds: string[] }  (preserves order)
+ *   - `'meta'` → { meta, colleagueIds, gallery? }  (colleagueIds preserves order)
  *   - `'colleague:<id>'` → Colleague
  *
  * Mutations write only the touched record (meta OR a single colleague), so
@@ -31,6 +31,9 @@ const COLLEAGUE_PREFIX = 'colleague:';
 interface MetaRecord {
   meta: AppData['meta'];
   colleagueIds: string[];
+  /** Polaroid-wall config. Absent on records written before the wall existed —
+   *  an absent wall is a valid state, so no DB version bump is needed. */
+  gallery?: GalleryConfig;
 }
 
 let dbPromise: Promise<IDBDatabase> | null = null;
@@ -96,7 +99,7 @@ export async function loadAll(): Promise<AppData | null> {
       const colleagues: Colleague[] = [];
       let remaining = metaRec.colleagueIds.length;
       if (remaining === 0) {
-        resolve({ meta: metaRec.meta, colleagues: [] });
+        resolve({ meta: metaRec.meta, colleagues: [], gallery: metaRec.gallery });
         return;
       }
       metaRec.colleagueIds.forEach((id, i) => {
@@ -104,7 +107,11 @@ export async function loadAll(): Promise<AppData | null> {
         req.onsuccess = () => {
           if (req.result) colleagues[i] = req.result as Colleague;
           if (--remaining === 0) {
-            resolve({ meta: metaRec.meta, colleagues: colleagues.filter(Boolean) });
+            resolve({
+              meta: metaRec.meta,
+              colleagues: colleagues.filter(Boolean),
+              gallery: metaRec.gallery,
+            });
           }
         };
         req.onerror = () => reject(req.error);
@@ -113,9 +120,13 @@ export async function loadAll(): Promise<AppData | null> {
   });
 }
 
-export function saveMeta(meta: AppData['meta'], colleagueIds: string[]): Promise<void> {
+export function saveMeta(
+  meta: AppData['meta'],
+  colleagueIds: string[],
+  gallery?: GalleryConfig,
+): Promise<void> {
   return runTx<void>('readwrite', (store) => {
-    store.put({ meta, colleagueIds } satisfies MetaRecord, META_KEY);
+    store.put({ meta, colleagueIds, gallery } satisfies MetaRecord, META_KEY);
   }) as Promise<void>;
 }
 
@@ -144,7 +155,10 @@ export async function saveAll(data: AppData): Promise<void> {
       for (const k of keysReq.result) {
         if (typeof k === 'string' && !keepKeys.has(k)) store.delete(k);
       }
-      store.put({ meta: data.meta, colleagueIds: ids } satisfies MetaRecord, META_KEY);
+      store.put(
+        { meta: data.meta, colleagueIds: ids, gallery: data.gallery } satisfies MetaRecord,
+        META_KEY,
+      );
       for (const c of data.colleagues) store.put(c, colleagueKey(c.id));
     };
     keysReq.onerror = () => reject(keysReq.error);

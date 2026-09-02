@@ -6,6 +6,8 @@ A personal goodbye gift for colleagues at **Pathlight School (Digital Academy)**
 
 **There is no public roster.** Nothing shipped to the web says who this was made for — not names, not ids, not a count. A colleague's name lives inside their own encrypted blob and only appears after their password decrypts it.
 
+There is one deliberate exception: **the polaroid wall** (`#/w/<token>`), a single shared page for the wider team — everyone as a cat, pegged to a string. It *is* a roster by design, so it's sealed under a 134-bit link-token rather than a password. See "The polaroid wall" below.
+
 The vibe: a heartfelt mini-memoir framed as a wrapped recap. Not a generic "thanks for everything" — each deck is custom-built per person.
 
 Originally built as a single self-contained HTML file (still preserved as `index.original.html` for reference). Refactored to React + Vite + TypeScript so it's easier to extend.
@@ -30,8 +32,10 @@ farewell_wrapped/
 │   ├── index.json          #   public: meta ONLY. No names, no ids, no roster.
 │   ├── colleagues/         #   per-colleague AES-GCM blobs, key = each colleague's plaintext password
 │   │   └── <id>.json.enc   #   payload = { name, category?, slides }
-│   └── lookup/             #   password → deck id, for entry without a link
-│       └── <digest>.json   #   { id }. Filename = PBKDF2(password), 600k iters
+│   ├── lookup/             #   password → deck id, for entry without a link
+│   │   └── <digest>.json   #   { id }. Filename = PBKDF2(password), 600k iters
+│   └── gallery/            #   the shared polaroid wall, key = gallery token
+│       └── <digest>.json.enc  # payload = { title?, note?, entries[] }. Filename = SHA-256(token)
 ├── data.json               # gitignored. Admin source-of-truth (plaintext passwords on each colleague)
 ├── scripts/encrypt-data.mjs # data.json → data/index.json + data/colleagues/*.json.enc (Node WebCrypto)
 ├── CLAUDE.md               # ← you are here. MUST stay at root for tools to load it.
@@ -44,6 +48,7 @@ farewell_wrapped/
 │   └── components/
 │       ├── Toast.tsx
 │       ├── landing/Unlock.tsx   # the entire public surface: password box + greeting
+│       ├── gallery/        # GalleryWall + GalleryLightbox — the polaroid wall
 │       ├── player/Player.tsx
 │       ├── slides/         # one view component per slide type + SlideRenderer + FragmentLayer + SlideBackground
 │       └── admin/          # Admin shell + Editor + SlidePreview + SlideStyleEditor + SlideFieldsEditor + SongPicker
@@ -58,10 +63,11 @@ farewell_wrapped/
 |---|---|---|
 | `#/d/<id>` | **Unlock** (password box, deck pinned by the link) | A colleague following their private link |
 | `#` (default) | **Unlock** (password box, deck found *from* the password) | Someone who has their password but not their link |
+| `#/w/<token>` | **Polaroid wall** (everyone as a cat, no password) | The wider team, via one shared link |
 | `#admin` | **Admin tool** | Michael only — build/edit decks |
 | (in-app, once a deck is unlocked) | **Player** | Visitors after decrypt |
 
-`Route` is a discriminated union (`{kind:'landing'|'admin'|'deck'}`) in `useHashRoute.ts`; `parseHash` validates the deck id against `DECK_ID_RE` before it can reach a fetch URL, so `#/d/../../x` can't path-traverse out of `data/colleagues/`.
+`Route` is a discriminated union (`{kind:'landing'|'admin'|'deck'|'gallery'}`) in `useHashRoute.ts`; `parseHash` validates the deck id against `DECK_ID_RE` and the wall token against `GALLERY_TOKEN_RE` before either can reach a fetch URL, so `#/d/../../x` and `#/w/../../x` can't path-traverse out of `data/`.
 
 The player overlay takes priority over routing — if `playerStore.currentColleagueId` is set, the player renders regardless of hash. See `src/App.tsx`.
 
@@ -86,7 +92,11 @@ AppData = {
     slides: Slide[],         // discriminated union, see src/types/index.ts
     category?: 'trainer' | 'yfa',   // admin-side grouping only; drives no public UI
     hidden?: boolean,               // "Paused" — encrypt-data writes NO blob, link 404s
-  }]
+    inGallery?: boolean,            // opt in to the polaroid wall
+    galleryCover?: 'left' | 'right',// which spirit-animal section fronts their polaroid
+    galleryOnly?: boolean,          // wall polaroid but NO deck (no password, no link)
+  }],
+  gallery?: { token?, title?, note? }  // wall config. `token` is a credential — never committed.
 }
 
 // What every visitor fetches — `data/index.json`. Meta only. No roster:
@@ -159,7 +169,7 @@ Each slide type has its own view component in `src/components/slides/` and gets 
 
 On boot:
 1. `appStore` kicks off an async read from **IndexedDB** at module load (`src/utils/storage.ts`; a one-time migration lifts the legacy `goodbye_wrapped_data_v1` localStorage key if it's still around). `isHydrated` flips true when it resolves. `migrateAppData()` runs on every load — coerces legacy shapes (string `bg`, `{kind:'preset'}` bg unchanged, mosaic `photos[]` → `media[]`, single fragment `dataUrl` → `dataUrls[]`, **`'orb-finale'` and `'wrapped-finale'` slides → `[spirit-animal, soundtrack]` pair** with bg/fragments/song fields preserved on the spirit-animal slide and the legacy colleague-level spirit animal data lifted onto its left section). Migration also DROPS the legacy `passwordHash` field — it's no longer used; admin shows "(needed for encryption)" until the user enters a plaintext `password`.
-2. `useDataJsonLoader` async-fetches `${BASE_URL}data/index.json`. If it returns 200 with valid JSON, calls `loadIndex()` which **replaces** the store with meta and an **empty** colleague list. Marks `isExportedFile: true` — that flag is also what tells `Unlock` to take the fetch-and-decrypt path instead of the admin-draft path.
+2. `useDataJsonLoader` async-fetches `${BASE_URL}data/index.json` (skipped entirely on the `#/w/` wall route — the wall needs nothing from the index, and `loadIndex()` would wipe the local draft it previews from). If it returns 200 with valid JSON, calls `loadIndex()` which **replaces** the store with meta and an **empty** colleague list. Marks `isExportedFile: true` — that flag is also what tells `Unlock` to take the fetch-and-decrypt path instead of the admin-draft path.
 3. On submit, `Unlock` needs a deck id. The `#/d/<id>` link supplies one directly. **Without a link** it derives one: `deriveLookupDigest(password)` (PBKDF2-SHA256, 600k iters, fixed site salt) → fetch `data/lookup/<digest>.json` → `{ id }`. A 404 there is the wrong-password case.
 4. With an id in hand it fetches `${BASE_URL}data/colleagues/<id>.json.enc` and runs `decryptJson(blob, enteredPassword)` (AES-GCM via WebCrypto). Auth-tag mismatch surfaces as `WrongPasswordError`. On success, `loadDeck()` inserts the colleague, and the "Hi, &lt;name&gt;" overlay's tap opens the player (that tap is also the user gesture that unblocks audio autoplay).
 
@@ -210,6 +220,7 @@ The repo is **public**, so committing real content directly would expose letter 
 5. Commit + push the `data/` tree.
 6. GitHub Actions builds with `npm run build`, then copies the committed `data/` tree into `dist/data/`. No secrets needed in the workflow — there's no global passphrase anymore.
 7. Send each person their link + password. Admin's **💬 Copy message** button (per colleague) puts a ready-to-send blurb with both on the clipboard; **🔗 Copy link** copies just the URL.
+8. If anyone is marked for the polaroid wall, `encrypt-data` also writes `data/gallery/<digest>.json.enc` and prints the **one wall link** to share with the group. Export warns if people are featured but no wall token has been generated yet.
 
 `scripts/encrypt-data.mjs` (Node, WebCrypto) MUST stay in sync with `src/utils/crypto.ts` (browser, WebCrypto) — same format `{v, salt, iv, ciphertext}` with the same KDF parameters.
 
@@ -287,6 +298,86 @@ Slide-level fields: `eyebrow` (small caps, default `"your soundtrack"`), `title`
 - **Bonus tracks:** add one to a deck with 0 songs and to a deck already at 5 featured; confirm the first appears on the card immediately and the second lands in "add more" as disabled. Remove one and confirm it leaves both the pool and the featured list.
 - **Missing media on a section:** placeholder ★ appears, no broken image icon.
 
+## The polaroid wall
+
+A second, separate page for the wider team — the colleagues who didn't get a
+full deck. One shared link, no password, showing everyone as a cat: polaroids
+pegged to sagging twine, tap one to open the full spirit-animal card.
+
+**Reached at `#/w/<token>`.** The token is 26 base36 chars (~134 bits) from
+`makeGalleryToken()`, and it is simultaneously the AES-GCM key for the wall's
+blob and (via SHA-256) the blob's filename. So the link *is* the credential:
+there's no password box, and the repo shows only ciphertext at an opaque
+filename. Rotating the token in admin invalidates every copy of the old link on
+the next export.
+
+### Why it doesn't break the no-roster rule
+
+The wall genuinely is a roster — names and faces on one page. That's the point
+of it, and it's fine *because it's sealed under the token*. Two invariants keep
+it from leaking into the deck system:
+
+- **No colleague ids in the wall blob.** `GalleryEntry` carries `name`, `cover`
+  and `slide` and nothing else. The wall goes to a whole group; an id in it
+  would hand every recipient the deck ids of the people featured, enough to
+  probe `data/colleagues/<id>.json.enc` and work out which of their colleagues
+  *also* got a private wrapped. Don't add one, not even as a React key.
+- **The token never ships in `data/index.json`.** It lives in `AppData.gallery`,
+  which stays in the gitignored `data.json`.
+
+### Where the cards come from
+
+The wall renders **the same `<SpiritAnimalCard>` the player does** — extracted
+into `src/components/slides/SpiritAnimalCard.tsx` so the deck and the wall can't
+drift apart. Each entry is that person's *first* `spirit-animal` slide, so
+people who already have decks need no second copy of their cat: edit the slide,
+re-export, the polaroid updates.
+
+`buildGalleryEntries()` in `src/utils/gallery.ts` is mirrored by the same logic
+in `scripts/encrypt-data.mjs` — including `DROPPED_CARD_FIELDS` (song fields,
+fragments, transient admin state are all stripped; the wall has no audio
+engine). **If those two lists diverge, the wall you preview stops matching the
+wall you ship.**
+
+### People with no deck
+
+A wall-only person is just a `Colleague` with `galleryOnly: true`, no password,
+and a single spirit-animal slide. Reusing `Colleague` rather than a parallel
+type means they get the whole existing `SpiritAnimalFields` editor for free —
+media upload, drag-to-crop, captions, title font picker. `encrypt-data` skips
+them silently for deck/lookup generation (they're *expected* to have no
+password, so warning about it every export would train you to ignore the
+warning that matters). Admin's "+ Add wall-only person" pre-wires all of it.
+
+### Admin surface
+
+- **Per person** (`ColleagueEditor`): a Type select (full deck / wall only), a
+  "Polaroid wall" on-off, and a "Polaroid shows" left/right cover picker. A
+  warning appears inline if someone's featured but has no spirit-animal slide.
+- **Globally** ("Polaroid wall" button → `GalleryEditor`): heading, note,
+  generate/rotate/copy the link, and a read-only roster of who's on it.
+- `ColleagueList` marks wall members 📌 and shows 🖼 (not ⚠️) for wall-only people.
+
+### Visual design
+
+Modelled on physical photo displays — twine, mini clothespins, handwriting.
+Details that carry it:
+
+- **Measured sag.** Each row draws an SVG catenary, and every polaroid's
+  `--drop` is *measured* from its laid-out position (`WallRow`'s layout effect),
+  not computed from its index. Flexbox centres short rows and sizes gaps with
+  `clamp()`, so index math left the clothespins floating off the twine at most
+  widths. Written straight to the DOM — this runs on every resize.
+- **Stable tilt.** `polaroidTilt(name, index)` hashes to −4°..+4°, so a photo
+  hangs the same way on every visit instead of reshuffling per render.
+- **Swing from the peg.** `transform-origin: 50% 0`. Hover sets `--tilt: 0deg`
+  on `.polaroid`, which straightens the counter-rotating `.polaroid-pin` for
+  free.
+- **Handwriting** (`--font-hand`, Caveat) on the white strip under each photo.
+  Added to the Google Fonts link in `index.html`.
+- The wall uses its own warm off-white palette, deliberately *not* the deck
+  gradients — the cats carry the colour.
+
 ## Removed: Memory Orb
 
 A 3D generative orb (three.js + @react-three/fiber + colorthief + simplex-noise) was previously the finale. It "didn't land" emotionally — abstract generative art without a name attached carried no weight. Replaced first by a single `wrapped-finale` keepsake card, then split into the current `spirit-animal` + `soundtrack` pair (see above). All orb code, deps, and CSS were ripped out:
@@ -336,10 +427,27 @@ It's in `.gitignore`. The committed artifacts are `data/index.json` (public) + `
 ### 11. Vite base path mismatches
 If you rename the GH Pages repo or switch to a custom domain, update `base` in `vite.config.ts`.
 
-### 12. StrictMode double-render
+### 12. Vite dev DOES serve the committed `data/` tree
+`data/` sits at the project root, and Vite's dev server serves the root — so
+`http://localhost:5173/data/index.json` returns the **real committed file**, not
+a 404. Consequences that have already bitten once:
+- `isExportedFile` is `true` in dev, so any "we must be in admin/dev" check
+  written against it is wrong on your own machine. The wall decides via "does
+  this browser hold a draft with anyone pinned to the wall" instead.
+- A *missing* file under `data/` returns **200 with `index.html`** (Vite's SPA
+  fallback), not 404. So `res.ok` is not a sufficient guard in dev — the JSON
+  parse is the real one.
+
+### 13. On your own machine, the wall always shows your draft
+`GalleryWall` prefers the local IndexedDB draft whenever it holds anyone with
+`inGallery`, so you can build the wall without exporting. That means the wall
+link never shows you the *published* blob on the laptop you author from. To see
+what everyone else sees, open it in a private window.
+
+### 14. StrictMode double-render
 React 19 + StrictMode runs effects twice in dev. The audio engine's URL-match guard makes it idempotent; new module-level state must tolerate double-firing.
 
-### 13. The `:not()` content-layering rule
+### 15. The `:not()` content-layering rule
 `src/styles/global.css` has:
 ```css
 .slide > *:not(.fragment-layer):not(.slide-bg):not(.photo-lightbox):not(.photo-mosaic):not(.quote-mark):not(.keepsake) {
@@ -349,19 +457,19 @@ React 19 + StrictMode runs effects twice in dev. The audio engine's URL-match gu
 ```
 This applies `position: relative; z-index: 2` to every direct child of `.slide`, *except* the listed exclusions. Anything that needs to be `position: absolute` (lightbox overlays, full-bleed children, the keepsake shell) must be added to the exclusion list — otherwise its layout breaks silently. Specificity is (0,6,0), so a per-class override needs equal-or-higher specificity to win.
 
-### 14. .mov files don't play reliably outside Safari
+### 16. .mov files don't play reliably outside Safari
 iPhone-recorded `.mov` (HEVC/H.265) plays in Safari but breaks in Chrome/Firefox. Always re-encode to `.mp4` (H.264) with the ffmpeg one-liner above.
 
-### 15. html-to-image + web fonts
+### 17. html-to-image + web fonts
 `html-to-image` will silently fall back to system fonts if the page's web fonts aren't fully loaded at capture time. `saveCardAsPng()` awaits `document.fonts.ready` first, but if a font is added after capture (rare), it can still miss. Test PNG export on a cold cache (private window) before shipping any change to the keepsake slides' typography.
 
-### 16. Mosaic edge-photo taps register as nav
+### 18. Mosaic edge-photo taps register as nav
 Player has 30%-wide `nav-zone` overlays at left/right (z-index 4). Mosaic photos sit at `z-index: 7` so taps land on the photo. Critical that `.photo-mosaic` does NOT form a stacking context (it's in the `:not()` exclusion list — keeps the inner `<img>`/`<video>` z-index propagating to the player's stacking context). The `.letter-wrap` is in the same exclusion list at `z-index: 7` for the same reason — without it, only the middle 40% of a long letter is actually scrollable because the side nav-zones cover the rest.
 
-### 17. `navigator.share({ files })` only works in real browsers
+### 19. `navigator.share({ files })` only works in real browsers
 The keepsake save flow opens the OS share sheet (→ "Save to Photos" / "Save to Gallery") only when the browser supports Web Share with files. **In-app browsers** (Instagram, Facebook, Slack, Gmail link previews, etc.) usually return `false` from `navigator.canShare({ files })`, so the user falls through to the download path. There is no zero-tap "save to gallery" available on the open web — even when the share sheet works, the user still taps "Save Image" once. If a colleague reports the file going to Downloads instead of Photos, they're almost certainly opening the link inside an app, not Safari/Chrome.
 
-### 18. Hold-to-pause vs scroll containers
+### 20. Hold-to-pause vs scroll containers
 The hold-to-pause pointer handlers live on `.player` and bubble-receive every touch. The `HOLD_MOVE_THRESHOLD_PX` of 8px cancels the timer once the user starts scrolling — that's why letter-wrap scrolling works without accidentally triggering pause. If you add a new scrollable region, make sure its `touch-action` permits the axis you want (`pan-y` for vertical) so the browser actually scrolls instead of fighting the pointer handler.
 
 ## Common tasks
@@ -375,6 +483,11 @@ The hold-to-pause pointer handlers live on `.player` and bubble-receive every to
 | Change slide gradient | `bg-*` CSS classes near top of `src/styles/global.css` |
 | Modify export | `handleExport()` in `src/components/admin/Admin.tsx` |
 | Touch the password / unlock flow | `src/components/landing/Unlock.tsx` + `decryptJson()` in `src/utils/crypto.ts` |
+| Tweak the polaroid wall's look | `src/components/gallery/GalleryWall.tsx` + the `.wall*` / `.polaroid*` rules at the bottom of `global.css` |
+| Change who's on the wall | Per-colleague "Polaroid wall" toggle in `ColleagueEditor.tsx` (`inGallery` / `galleryCover`); global settings in `GalleryEditor.tsx` |
+| Change what the wall publishes | `buildGalleryEntries()` in `src/utils/gallery.ts` AND `writeGallery()` in `scripts/encrypt-data.mjs` — together, always |
+| Rotate / regenerate the wall link | "♻ New link" in `GalleryEditor` → re-run `npm run encrypt-data`. Every old link dies. |
+| Change the wall link format | `galleryHash`/`galleryUrl`/`GALLERY_TOKEN_RE` in `src/utils/links.ts` + `parseHash()` + `galleryUrl` in `scripts/encrypt-data.mjs` |
 | Change the private-link format | `src/utils/links.ts` (`deckHash`/`deckUrl`/`SITE_URL`) + `parseHash()` in `useHashRoute.ts` + `SITE_URL` in `scripts/encrypt-data.mjs` — all three together |
 | Change the encrypt format | `src/utils/crypto.ts` AND `scripts/encrypt-data.mjs` together — they MUST agree |
 | Change deploy / data flow | `.github/workflows/deploy.yml` + `useDataJsonLoader.ts` + `scripts/encrypt-data.mjs` |
@@ -401,7 +514,11 @@ npm run encrypt-data # data.json → data/index.json + data/colleagues/*.json.en
 
 ## Don't break
 
-- **The no-roster invariant.** `data/index.json` carries `meta` and nothing else, and no name, id, or count is published anywhere. Don't add a colleague list to the index, a name to the URL, or any view that enumerates people. The whole design exists so a visitor can't see who this was made for.
+- **The no-roster invariant.** `data/index.json` carries `meta` and nothing else, and no name, id, or count is published anywhere. Don't add a colleague list to the index, a name to the URL, or any view that enumerates people. The whole design exists so a visitor can't see who this was made for. The polaroid wall is the one sanctioned exception, and only because it's sealed under its own link-token.
+- **No colleague ids in the wall blob** (`GalleryEntry` = name + cover + slide). Adding one — even as a React key — would let anyone holding the shared wall link work out which of the featured people also has a private deck.
+- **The wall token never ships publicly.** It lives in `AppData.gallery` in the gitignored `data.json`, and `loadIndex()` deliberately drops it. It's the key AND the filename AND the credential.
+- **`buildGalleryEntries()` / `DROPPED_CARD_FIELDS` are mirrored** in `src/utils/gallery.ts` and `scripts/encrypt-data.mjs`. Diverging them makes admin's wall preview lie about what ships.
+- **`<SpiritAnimalCard>` is shared** by the player and the wall. Fork it and the "your polaroid opens your actual card" promise quietly stops being true.
 - **Names live inside the ciphertext** (`DeckPayload.name`). Moving a name back out to a public file re-breaks the above.
 - **Identical failure messages** in `Unlock.tsx` — separate "no such deck" / "wrong password" / "no lookup match" errors would make the id space probeable.
 - **`LOOKUP_SALT` and the 600k iterations on the lookup digest.** Dropping the iteration count to make password-only entry feel snappier would turn `data/lookup/` into a cheaply brute-forceable list of password hashes.

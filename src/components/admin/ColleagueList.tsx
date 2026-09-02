@@ -5,9 +5,18 @@ interface Props {
   selectedId: string | null;
   onSelect: (id: string) => void;
   onAdd: () => void;
+  onAddWallOnly: () => void;
 }
 
-export function ColleagueList({ colleagues, selectedId, onSelect, onAdd }: Props) {
+/** The ⚠️ means "no password, so no deck ships". It's meaningless for wall-only
+ *  people — they're never meant to have one — so they get 🖼 instead and the
+ *  warning stays a real warning. */
+function statusFor(c: Colleague): string {
+  if (c.galleryOnly) return '🖼';
+  return c.password ? '🔒' : '⚠️';
+}
+
+export function ColleagueList({ colleagues, selectedId, onSelect, onAdd, onAddWallOnly }: Props) {
   return (
     <div className="colleague-list">
       <h3>Colleagues ({colleagues.length})</h3>
@@ -17,14 +26,25 @@ export function ColleagueList({ colleagues, selectedId, onSelect, onAdd }: Props
           className={`col-item ${c.id === selectedId ? 'active' : ''}`}
           onClick={() => onSelect(c.id)}
         >
-          <span>{c.name || '(unnamed)'}</span>
+          <span>
+            {c.name || '(unnamed)'}
+            {c.inGallery && (
+              <span className="col-item-wall" title="On the polaroid wall">
+                {' '}
+                📌
+              </span>
+            )}
+          </span>
           <span className="meta">
-            {c.slides?.length || 0} slides {c.password ? '🔒' : '⚠️'}
+            {c.galleryOnly ? 'wall only' : `${c.slides?.length || 0} slides`} {statusFor(c)}
           </span>
         </div>
       ))}
       <button className="add-colleague-btn" onClick={onAdd}>
         + Add colleague
+      </button>
+      <button className="add-colleague-btn add-colleague-btn-alt" onClick={onAddWallOnly}>
+        + Add wall-only person
       </button>
     </div>
   );

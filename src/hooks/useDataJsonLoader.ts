@@ -18,6 +18,9 @@ import { useHashRoute } from './useHashRoute';
  * previous viewer-flow `loadIndex()` doesn't leave the store in viewer shape
  * when the user navigates back to admin.
  *
+ * On the gallery route: fetches nothing. The wall carries its own heading, and
+ * `loadIndex()` would wipe the local draft it previews from.
+ *
  * In dev (no data/ tree served), the fetch 404s silently and the admin's local
  * draft is used.
  */
@@ -26,12 +29,20 @@ export function useDataJsonLoader() {
   const reloadFromStorage = useAppStore((s) => s.reloadFromStorage);
   const [route] = useHashRoute();
   const isAdmin = route.kind === 'admin';
+  // The polaroid wall needs nothing from the index — its heading travels
+  // inside its own encrypted blob. Fetching it anyway would be actively
+  // harmful: `loadIndex()` clears the colleague list, which is exactly the
+  // local draft the wall previews from while you're still building it. (And
+  // the index IS reachable in dev — Vite serves the committed data/ tree
+  // straight off the project root, so this can't be left to a 404.)
+  const isGallery = route.kind === 'gallery';
 
   useEffect(() => {
     if (isAdmin) {
       void reloadFromStorage();
       return;
     }
+    if (isGallery) return;
     let cancelled = false;
     fetch(`${import.meta.env.BASE_URL}data/index.json`, { cache: 'no-store' })
       .then((res) => {
@@ -48,5 +59,5 @@ export function useDataJsonLoader() {
     return () => {
       cancelled = true;
     };
-  }, [isAdmin, loadIndex, reloadFromStorage]);
+  }, [isAdmin, isGallery, loadIndex, reloadFromStorage]);
 }

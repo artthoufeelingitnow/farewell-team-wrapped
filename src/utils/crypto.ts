@@ -117,6 +117,32 @@ export async function deriveLookupDigest(password: string): Promise<string> {
     .join('');
 }
 
+/** Domain-separation prefix for the polaroid wall's filename digest. Must stay
+ *  byte-identical to GALLERY_PREFIX in scripts/encrypt-data.mjs. */
+const GALLERY_PREFIX = 'goodbye-wrapped/gallery/v1:';
+
+/** Hex digest naming the wall's blob: `data/gallery/<digest>.json.enc`.
+ *
+ *  A plain SHA-256, NOT the 600k-iteration PBKDF2 used for deck passwords —
+ *  and that difference is deliberate, not an oversight. PBKDF2's iteration
+ *  count exists to make guessing a *low-entropy human password* expensive.
+ *  The wall's token is 128 bits from `makeGalleryToken()`, so guessing the
+ *  filename means guessing 128 bits; slowing each guess by 600k iterations
+ *  changes an already-impossible search into a differently-impossible one,
+ *  while costing every visitor a second of page load.
+ *
+ *  The blob's AES key still comes from the ordinary `deriveKey` path, so the
+ *  on-disk format stays identical to a colleague's deck. */
+export async function deriveGalleryDigest(token: string): Promise<string> {
+  const bits = await crypto.subtle.digest(
+    'SHA-256',
+    new TextEncoder().encode(GALLERY_PREFIX + token),
+  );
+  return Array.from(new Uint8Array(bits))
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('');
+}
+
 export class WrongPasswordError extends Error {
   constructor() {
     super('wrong-password');
