@@ -3004,3 +3004,38 @@
     color: rgba(255, 255, 255, 0.4);
     white-space: nowrap;
   }
+
+  /* Card still decrypting — the wall holds only covers up front, and some
+     cards are 25 MB, so the tap needs immediate feedback. Sized like the card
+     it's standing in for so the lightbox doesn't jump when it arrives. */
+  .wall-card-placeholder {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    height: min(70vh, 620px);
+    aspect-ratio: 9 / 16;
+    max-width: calc(100vw - 40px);
+    border-radius: 18px;
+    background: linear-gradient(180deg, #1a1a1a 0%, #0a0a0a 100%);
+    color: rgba(255, 255, 255, 0.6);
+    font-family: var(--font-body);
+    font-size: 14px;
+    text-align: center;
+    padding: 24px;
+  }
+  .wall-card-spinner {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    border: 2px solid rgba(255, 255, 255, 0.18);
+    border-top-color: rgba(255, 255, 255, 0.75);
+    animation: wall-spin 0.8s linear infinite;
+  }
+  @keyframes wall-spin {
+    to { transform: rotate(360deg); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .wall-card-spinner { animation-duration: 2.4s; }
+  }

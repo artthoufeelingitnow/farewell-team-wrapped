@@ -12,14 +12,20 @@
  *                                     of the password, so someone with only
  *                                     their password (no link) can still find
  *                                     their deck. Contains no name.
- *   data/gallery/<digest>.json.enc  — the shared polaroid wall. AES-GCM, key =
- *                                     gallery.token. Filename is a plain
- *                                     SHA-256 of that token (it's 134 bits, so
- *                                     a slow KDF buys nothing). Holds the names
- *                                     and spirit-animal cards of everyone
- *                                     opted in — and NO colleague ids, so it
- *                                     can't be used to work out which of them
- *                                     also has a private deck.
+ *   data/gallery/<digest>/          — the shared polaroid wall. AES-GCM, key =
+ *     index.json.enc                    gallery.token. Directory name is a
+ *     <i>.json.enc                      plain SHA-256 of that token (it's 134
+ *                                       bits, so a slow KDF buys nothing).
+ *                                     index.json.enc holds names + cover
+ *                                     images only; <i>.json.enc is one
+ *                                     person's full card, fetched on tap.
+ *                                     Split because a single blob was 107 MB —
+ *                                     over GitHub's file limit, and an absurd
+ *                                     first paint. NO colleague ids anywhere
+ *                                     in here, so the wall can't be used to
+ *                                     work out which of the featured people
+ *                                     also has a private deck; <i> is a
+ *                                     position on the wall, nothing more.
  *
  * There is no public list of colleagues anywhere. Two ways in, both requiring
  * the password: the private `#/d/<id>` link (printed below), or the password
@@ -32,7 +38,7 @@
  * propagate (a colleague removed from data.json gets their .json.enc removed).
  */
 
-import { readFileSync, writeFileSync, mkdirSync, rmSync, existsSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync, rmSync, existsSync, statSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -162,10 +168,15 @@ function galleryCardFromSlide(slide) {
 
 /** Build + write the shared wall. Returns the token if one was published.
  *
+ *  Writes an index (names + covers) plus one blob per person, rather than one
+ *  file with everything: covers are small but the other half of a card is
+ *  routinely a multi-MB GIF, and bundling them made a 107 MB file that GitHub
+ *  refuses outright.
+ *
  *  Note what does NOT go in: colleague ids. The wall goes to a whole group, so
  *  an id in it would hand every recipient the deck ids of the people featured —
  *  enough to probe data/colleagues/ and learn which of their colleagues also
- *  got a private wrapped. Names and cards only. */
+ *  got a private wrapped. Names, covers and cards only. */
 async function writeGallery(data) {
   const config = data.gallery ?? {};
   const featured = data.colleagues.filter((c) => c.inGallery);
@@ -179,7 +190,9 @@ async function writeGallery(data) {
     return null;
   }
 
-  const entries = [];
+  // One ordered list both halves derive from, so an index entry and its card
+  // blob can never fall out of step. Mirrors buildWallPeople in utils/gallery.
+  const people = [];
   for (const c of featured) {
     const slide = (c.slides ?? []).find((s) => s.type === 'spirit-animal');
     if (!c.name || !slide) {
@@ -189,28 +202,64 @@ async function writeGallery(data) {
       );
       continue;
     }
-    entries.push({
+    people.push({
       name: c.name,
       cover: c.galleryCover === 'right' ? 'right' : 'left',
       slide: galleryCardFromSlide(stripTransient(slide)),
     });
   }
 
-  if (entries.length === 0) {
+  if (people.length === 0) {
     console.warn('\u26a0 Nobody on the wall had a usable card — wall NOT published.');
     return null;
   }
 
-  const payload = {
+  const digest = await deriveGalleryDigest(config.token);
+  const dir = join(OUT_GALLERY, digest);
+  mkdirSync(dir, { recursive: true });
+
+  // Index: names + covers only. This is what everyone downloads on open.
+  const entries = people.map(({ name, slide, cover }) => {
+    const section = cover === 'right' ? slide.right : slide.left;
+    const entry = { name };
+    if (section?.media) entry.cover = section.media;
+    if (section?.mediaPosition) entry.coverPosition = section.mediaPosition;
+    return entry;
+  });
+  const indexPayload = {
     ...(config.title ? { title: config.title } : {}),
     ...(config.note ? { note: config.note } : {}),
     entries,
   };
-  mkdirSync(OUT_GALLERY, { recursive: true });
-  const blob = await encryptJson(payload, config.token);
-  const digest = await deriveGalleryDigest(config.token);
-  writeFileSync(join(OUT_GALLERY, `${digest}.json.enc`), JSON.stringify(blob));
-  return { token: config.token, count: entries.length };
+  writeFileSync(
+    join(dir, 'index.json.enc'),
+    JSON.stringify(await encryptJson(indexPayload, config.token)),
+  );
+
+  // One blob per person, named by wall position.
+  let biggest = 0;
+  for (let i = 0; i < people.length; i++) {
+    const blob = await encryptJson({ slide: people[i].slide }, config.token);
+    const json = JSON.stringify(blob);
+    writeFileSync(join(dir, `${i}.json.enc`), json);
+    if (json.length > biggest) biggest = json.length;
+  }
+
+  const indexBytes = statSync(join(dir, 'index.json.enc')).size;
+  const mb = (b) => (b / 1048576).toFixed(1);
+  console.log(
+    `\nWall: index is ${mb(indexBytes)} MB (what everyone downloads on open); ` +
+      `largest single card is ${mb(biggest)} MB (loads only when tapped).`,
+  );
+  // GitHub hard-rejects any file over 100 MB, which is what a single combined
+  // blob hit. Warn well before that so it's caught here, not at push time.
+  if (biggest > 90 * 1048576 || indexBytes > 90 * 1048576) {
+    console.warn(
+      '\u26a0 A wall file is near GitHub\'s 100 MB limit. Shrink that person\'s media.',
+    );
+  }
+
+  return { token: config.token, count: people.length };
 }
 
 function main() {

@@ -1,8 +1,14 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useAppStore } from '../../store/appStore';
-import type { GalleryEntry, GalleryPayload, MediaItem } from '../../types';
+import type {
+  GalleryCardPayload,
+  GalleryEntry,
+  GalleryIndexPayload,
+  MediaItem,
+  SpiritAnimalSlide,
+} from '../../types';
 import { decryptJson, deriveGalleryDigest, WrongPasswordError, type EncryptedBlob } from '../../utils/crypto';
-import { buildGalleryEntries, polaroidTilt } from '../../utils/gallery';
+import { buildGalleryEntries, buildWallPeople, polaroidTilt } from '../../utils/gallery';
 import { isValidGalleryToken } from '../../utils/links';
 import { GalleryLightbox } from './GalleryLightbox';
 
@@ -14,6 +20,11 @@ import { GalleryLightbox } from './GalleryLightbox';
  * softening of the project's usual posture, and it's why the token is 134 bits
  * of CSPRNG rather than anything human-typed — a guessable link would be the
  * whole security model failing at once.
+ *
+ * The wall loads in two stages. The index blob carries names and cover images
+ * only; a person's full card is fetched and decrypted the moment their
+ * polaroid is tapped, then cached for the session. Bundling every card into
+ * the index instead made the first paint a 107 MB download.
  *
  * Two data paths:
  *   - a local admin draft exists: build the wall live from it, so you can see
@@ -47,8 +58,14 @@ const SAG_PX = 22;
 
 type LoadState =
   | { kind: 'loading' }
-  | { kind: 'ready'; payload: GalleryPayload }
+  | { kind: 'ready'; payload: GalleryIndexPayload }
   | { kind: 'error' };
+
+/** What the lightbox is showing: a card we have, or one still in flight. */
+type OpenCard =
+  | { index: number; state: 'loading' }
+  | { index: number; state: 'ready'; slide: SpiritAnimalSlide }
+  | { index: number; state: 'error' };
 
 interface Props {
   token: string;
@@ -60,16 +77,25 @@ export function GalleryWall({ token }: Props) {
   const isHydrated = useAppStore((s) => s.isHydrated);
 
   const [state, setState] = useState<LoadState>({ kind: 'loading' });
-  const [openIndex, setOpenIndex] = useState<number | null>(null);
+  const [open, setOpen] = useState<OpenCard | null>(null);
+  /** Cards already decrypted this session — tapping the same polaroid twice
+   *  shouldn't re-download a 25 MB GIF. */
+  const cardCache = useRef(new Map<number, SpiritAnimalSlide>());
 
   // Draft path — read the wall straight out of the admin draft. Deliberately
   // ignores the token: locally there's nothing to decrypt, and demanding the
   // real token would make previewing a chore while you're still building.
-  const draftPayload = useMemo<GalleryPayload | null>(() => {
+  const draftPayload = useMemo<GalleryIndexPayload | null>(() => {
     const entries = buildGalleryEntries(colleagues);
     if (entries.length === 0) return null;
     return { title: localGallery?.title, note: localGallery?.note, entries };
   }, [colleagues, localGallery]);
+
+  /** Draft cards are already in memory — no fetch, no decrypt. */
+  const draftCards = useMemo<SpiritAnimalSlide[] | null>(
+    () => (draftPayload ? buildWallPeople(colleagues).map((p) => p.slide) : null),
+    [draftPayload, colleagues],
+  );
 
   useEffect(() => {
     // Wait for the IndexedDB read before deciding there's no draft, or the
@@ -89,9 +115,10 @@ export function GalleryWall({ token }: Props) {
     (async () => {
       try {
         const digest = await deriveGalleryDigest(token);
-        const res = await fetch(`${import.meta.env.BASE_URL}data/gallery/${digest}.json.enc`, {
-          cache: 'no-store',
-        });
+        const res = await fetch(
+          `${import.meta.env.BASE_URL}data/gallery/${digest}/index.json.enc`,
+          { cache: 'no-store' },
+        );
         // A missing blob is a 404 in production but a 200 of index.html under
         // Vite's dev SPA fallback, so the JSON parse below is the real guard.
         if (!res.ok) {
@@ -102,7 +129,7 @@ export function GalleryWall({ token }: Props) {
           return;
         }
         const blob = (await res.json()) as EncryptedBlob;
-        const payload = await decryptJson<GalleryPayload>(blob, token);
+        const payload = await decryptJson<GalleryIndexPayload>(blob, token);
         if (!cancelled) setState({ kind: 'ready', payload });
       } catch (err) {
         // A WrongPasswordError here means the filename hashed fine but the key
@@ -115,6 +142,39 @@ export function GalleryWall({ token }: Props) {
       cancelled = true;
     };
   }, [token, draftPayload, isHydrated]);
+
+  /** Tap → show the card. Draft and cached cards open instantly; anything else
+   *  opens the lightbox in a loading state and fills in when the blob lands, so
+   *  a slow 25 MB card still gives immediate feedback that the tap registered. */
+  async function openCard(index: number) {
+    if (draftCards) {
+      const slide = draftCards[index];
+      if (slide) setOpen({ index, state: 'ready', slide });
+      return;
+    }
+    const cached = cardCache.current.get(index);
+    if (cached) {
+      setOpen({ index, state: 'ready', slide: cached });
+      return;
+    }
+    setOpen({ index, state: 'loading' });
+    try {
+      const digest = await deriveGalleryDigest(token);
+      const res = await fetch(
+        `${import.meta.env.BASE_URL}data/gallery/${digest}/${index}.json.enc`,
+        { cache: 'no-store' },
+      );
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const blob = (await res.json()) as EncryptedBlob;
+      const card = await decryptJson<GalleryCardPayload>(blob, token);
+      cardCache.current.set(index, card.slide);
+      // Ignore a card that lands after the user already closed or moved on.
+      setOpen((cur) => (cur?.index === index ? { index, state: 'ready', slide: card.slide } : cur));
+    } catch (err) {
+      console.warn('Card fetch failed:', err);
+      setOpen((cur) => (cur?.index === index ? { index, state: 'error' } : cur));
+    }
+  }
 
   if (state.kind === 'loading') {
     return (
@@ -151,13 +211,18 @@ export function GalleryWall({ token }: Props) {
           <p>Pin someone up in admin and they'll show here.</p>
         </div>
       ) : (
-        <WallRows entries={entries} onOpen={setOpenIndex} />
+        <WallRows entries={entries} onOpen={openCard} />
       )}
 
       <div className="wall-footer">every one of you, as a cat</div>
 
-      {openIndex !== null && entries[openIndex] && (
-        <GalleryLightbox entry={entries[openIndex]} onClose={() => setOpenIndex(null)} />
+      {open && entries[open.index] && (
+        <GalleryLightbox
+          name={entries[open.index].name}
+          slide={open.state === 'ready' ? open.slide : null}
+          failed={open.state === 'error'}
+          onClose={() => setOpen(null)}
+        />
       )}
     </div>
   );
@@ -306,9 +371,8 @@ function Polaroid({
   index: number;
   onOpen: () => void;
 }) {
-  const section = entry.cover === 'right' ? entry.slide.right : entry.slide.left;
-  const media = section?.media;
-  const pos = section?.mediaPosition ?? { x: 50, y: 50 };
+  const media = entry.cover;
+  const pos = entry.coverPosition ?? { x: 50, y: 50 };
   const tilt = polaroidTilt(entry.name, index);
 
   return (

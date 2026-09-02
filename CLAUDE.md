@@ -34,8 +34,9 @@ farewell_wrapped/
 │   │   └── <id>.json.enc   #   payload = { name, category?, slides }
 │   ├── lookup/             #   password → deck id, for entry without a link
 │   │   └── <digest>.json   #   { id }. Filename = PBKDF2(password), 600k iters
-│   └── gallery/            #   the shared polaroid wall, key = gallery token
-│       └── <digest>.json.enc  # payload = { title?, note?, entries[] }. Filename = SHA-256(token)
+│   └── gallery/<digest>/   #   the shared polaroid wall, key = gallery token
+│       ├── index.json.enc  #     names + COVER images only — the first paint
+│       └── <i>.json.enc    #     one person's full card, fetched on tap
 ├── data.json               # gitignored. Admin source-of-truth (plaintext passwords on each colleague)
 ├── scripts/encrypt-data.mjs # data.json → data/index.json + data/colleagues/*.json.enc (Node WebCrypto)
 ├── CLAUDE.md               # ← you are here. MUST stay at root for tools to load it.
@@ -304,6 +305,15 @@ A second, separate page for the wider team — the colleagues who didn't get a
 full deck. One shared link, no password, showing everyone as a cat: polaroids
 pegged to sagging twine, tap one to open the full spirit-animal card.
 
+**It loads in two stages.** `index.json.enc` carries names and cover images
+only; a person's full spirit-animal card is fetched and decrypted when their
+polaroid is tapped, then cached for the session. This is not premature
+optimisation — the first version bundled all 27 cards into one blob and came
+out at **107 MB**, over GitHub's hard 100 MB file limit and an absurd download
+for a page of thumbnails. The cover half of a card is a small jpeg; the other
+half is routinely a multi-MB GIF (one is 25 MB). Splitting took the first paint
+to ~6 MB. `encrypt-data` prints both numbers and warns at 90 MB.
+
 **Reached at `#/w/<token>`.** The token is 26 base36 chars (~134 bits) from
 `makeGalleryToken()`, and it is simultaneously the AES-GCM key for the wall's
 blob and (via SHA-256) the blob's filename. So the link *is* the credential:
@@ -317,11 +327,15 @@ The wall genuinely is a roster — names and faces on one page. That's the point
 of it, and it's fine *because it's sealed under the token*. Two invariants keep
 it from leaking into the deck system:
 
-- **No colleague ids in the wall blob.** `GalleryEntry` carries `name`, `cover`
-  and `slide` and nothing else. The wall goes to a whole group; an id in it
-  would hand every recipient the deck ids of the people featured, enough to
+- **No colleague ids anywhere in the wall.** `GalleryEntry` carries a name and
+  a cover image; a card blob carries a slide. The `<i>` in a card's filename is
+  a position on the wall, nothing more. The wall goes to a whole group; an id in
+  it would hand every recipient the deck ids of the people featured, enough to
   probe `data/colleagues/<id>.json.enc` and work out which of their colleagues
   *also* got a private wrapped. Don't add one, not even as a React key.
+  (The file *count* in `data/gallery/<digest>/` does reveal how many people are
+  on the wall — same accepted leak as `data/colleagues/`, and the recipients can
+  see the wall anyway.)
 - **The token never ships in `data/index.json`.** It lives in `AppData.gallery`,
   which stays in the gitignored `data.json`.
 
@@ -333,11 +347,13 @@ drift apart. Each entry is that person's *first* `spirit-animal` slide, so
 people who already have decks need no second copy of their cat: edit the slide,
 re-export, the polaroid updates.
 
-`buildGalleryEntries()` in `src/utils/gallery.ts` is mirrored by the same logic
-in `scripts/encrypt-data.mjs` — including `DROPPED_CARD_FIELDS` (song fields,
-fragments, transient admin state are all stripped; the wall has no audio
-engine). **If those two lists diverge, the wall you preview stops matching the
-wall you ship.**
+`buildWallPeople()` in `src/utils/gallery.ts` is the single ordered list both
+the index and the card blobs derive from — **that order is a contract**, since a
+person's position in it is the `<i>` their card is named after. It's mirrored by
+the same logic in `scripts/encrypt-data.mjs`, including `DROPPED_CARD_FIELDS`
+(song fields, fragments, transient admin state are all stripped; the wall has no
+audio engine). **If those diverge, the wall you preview stops matching the wall
+you ship — or worse, a polaroid opens someone else's card.**
 
 ### People with no deck
 
@@ -438,16 +454,25 @@ a 404. Consequences that have already bitten once:
   fallback), not 404. So `res.ok` is not a sufficient guard in dev — the JSON
   parse is the real one.
 
-### 13. On your own machine, the wall always shows your draft
+### 13. The wall has a hard size ceiling
+GitHub rejects any file over 100 MB at push time (`GH001`), and the wall
+aggregates media across everyone on it. That's why it ships split — see "The
+polaroid wall". Two things follow: a *single person's* card must stay under
+100 MB on its own, and the index (every cover, downloaded by everyone on open)
+should stay small. Animated GIFs are the usual culprit — `compressImage()`
+doesn't touch them, since rasterising would kill the animation. `encrypt-data`
+prints both sizes on every run.
+
+### 14. On your own machine, the wall always shows your draft
 `GalleryWall` prefers the local IndexedDB draft whenever it holds anyone with
 `inGallery`, so you can build the wall without exporting. That means the wall
 link never shows you the *published* blob on the laptop you author from. To see
 what everyone else sees, open it in a private window.
 
-### 14. StrictMode double-render
+### 15. StrictMode double-render
 React 19 + StrictMode runs effects twice in dev. The audio engine's URL-match guard makes it idempotent; new module-level state must tolerate double-firing.
 
-### 15. The `:not()` content-layering rule
+### 16. The `:not()` content-layering rule
 `src/styles/global.css` has:
 ```css
 .slide > *:not(.fragment-layer):not(.slide-bg):not(.photo-lightbox):not(.photo-mosaic):not(.quote-mark):not(.keepsake) {
@@ -457,19 +482,19 @@ React 19 + StrictMode runs effects twice in dev. The audio engine's URL-match gu
 ```
 This applies `position: relative; z-index: 2` to every direct child of `.slide`, *except* the listed exclusions. Anything that needs to be `position: absolute` (lightbox overlays, full-bleed children, the keepsake shell) must be added to the exclusion list — otherwise its layout breaks silently. Specificity is (0,6,0), so a per-class override needs equal-or-higher specificity to win.
 
-### 16. .mov files don't play reliably outside Safari
+### 17. .mov files don't play reliably outside Safari
 iPhone-recorded `.mov` (HEVC/H.265) plays in Safari but breaks in Chrome/Firefox. Always re-encode to `.mp4` (H.264) with the ffmpeg one-liner above.
 
-### 17. html-to-image + web fonts
+### 18. html-to-image + web fonts
 `html-to-image` will silently fall back to system fonts if the page's web fonts aren't fully loaded at capture time. `saveCardAsPng()` awaits `document.fonts.ready` first, but if a font is added after capture (rare), it can still miss. Test PNG export on a cold cache (private window) before shipping any change to the keepsake slides' typography.
 
-### 18. Mosaic edge-photo taps register as nav
+### 19. Mosaic edge-photo taps register as nav
 Player has 30%-wide `nav-zone` overlays at left/right (z-index 4). Mosaic photos sit at `z-index: 7` so taps land on the photo. Critical that `.photo-mosaic` does NOT form a stacking context (it's in the `:not()` exclusion list — keeps the inner `<img>`/`<video>` z-index propagating to the player's stacking context). The `.letter-wrap` is in the same exclusion list at `z-index: 7` for the same reason — without it, only the middle 40% of a long letter is actually scrollable because the side nav-zones cover the rest.
 
-### 19. `navigator.share({ files })` only works in real browsers
+### 20. `navigator.share({ files })` only works in real browsers
 The keepsake save flow opens the OS share sheet (→ "Save to Photos" / "Save to Gallery") only when the browser supports Web Share with files. **In-app browsers** (Instagram, Facebook, Slack, Gmail link previews, etc.) usually return `false` from `navigator.canShare({ files })`, so the user falls through to the download path. There is no zero-tap "save to gallery" available on the open web — even when the share sheet works, the user still taps "Save Image" once. If a colleague reports the file going to Downloads instead of Photos, they're almost certainly opening the link inside an app, not Safari/Chrome.
 
-### 20. Hold-to-pause vs scroll containers
+### 21. Hold-to-pause vs scroll containers
 The hold-to-pause pointer handlers live on `.player` and bubble-receive every touch. The `HOLD_MOVE_THRESHOLD_PX` of 8px cancels the timer once the user starts scrolling — that's why letter-wrap scrolling works without accidentally triggering pause. If you add a new scrollable region, make sure its `touch-action` permits the axis you want (`pan-y` for vertical) so the browser actually scrolls instead of fighting the pointer handler.
 
 ## Common tasks
@@ -485,7 +510,8 @@ The hold-to-pause pointer handlers live on `.player` and bubble-receive every to
 | Touch the password / unlock flow | `src/components/landing/Unlock.tsx` + `decryptJson()` in `src/utils/crypto.ts` |
 | Tweak the polaroid wall's look | `src/components/gallery/GalleryWall.tsx` + the `.wall*` / `.polaroid*` rules at the bottom of `global.css` |
 | Change who's on the wall | Per-colleague "Polaroid wall" toggle in `ColleagueEditor.tsx` (`inGallery` / `galleryCover`); global settings in `GalleryEditor.tsx` |
-| Change what the wall publishes | `buildGalleryEntries()` in `src/utils/gallery.ts` AND `writeGallery()` in `scripts/encrypt-data.mjs` — together, always |
+| Change what the wall publishes | `buildWallPeople()`/`buildGalleryEntries()` in `src/utils/gallery.ts` AND `writeGallery()` in `scripts/encrypt-data.mjs` — together, always |
+| Wall too heavy / a file near 100 MB | Shrink that person's spirit-animal media. `encrypt-data` prints the index size and the largest card, and warns at 90 MB |
 | Rotate / regenerate the wall link | "♻ New link" in `GalleryEditor` → re-run `npm run encrypt-data`. Every old link dies. |
 | Change the wall link format | `galleryHash`/`galleryUrl`/`GALLERY_TOKEN_RE` in `src/utils/links.ts` + `parseHash()` + `galleryUrl` in `scripts/encrypt-data.mjs` |
 | Change the private-link format | `src/utils/links.ts` (`deckHash`/`deckUrl`/`SITE_URL`) + `parseHash()` in `useHashRoute.ts` + `SITE_URL` in `scripts/encrypt-data.mjs` — all three together |

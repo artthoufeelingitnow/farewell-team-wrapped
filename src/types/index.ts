@@ -335,27 +335,42 @@ export interface GalleryConfig {
   note?: string;
 }
 
-/** One polaroid on the wall.
+/** One polaroid on the wall, as it appears *before* anyone taps it.
+ *
+ *  Carries only the cover image, NOT the whole card. The wall is a single page
+ *  showing everybody, so bundling every full card into it meant downloading
+ *  every person's media up front — 107 MB in practice, because the non-cover
+ *  half of a card is often a multi-megabyte GIF. Covers alone are a couple of
+ *  MB; the rest loads per person, on tap.
  *
  *  Deliberately carries NO colleague id. The wall is shared with a group, so
  *  publishing ids inside it would hand every recipient the deck ids of the
  *  featured people — enough to probe `data/colleagues/<id>.json.enc` and learn
- *  exactly which of them also got a private wrapped deck. The card only ever
- *  needs a name and the slide, so nothing else travels. */
+ *  exactly which of them also got a private wrapped deck. Nothing but a name
+ *  and a picture travels. */
 export interface GalleryEntry {
   name: string;
-  cover: GallerySide;
-  /** Their spirit-animal card, lifted from their deck (or from the single
-   *  slide a gallery-only person carries). Song/fragment fields are stripped
-   *  at encrypt time — the wall plays no audio. */
-  slide: SpiritAnimalSlide;
+  /** The chosen section's media, inlined so the wall paints in one fetch. */
+  cover?: MediaItem;
+  /** `object-position` for the cover, carried over from that section. */
+  coverPosition?: { x: number; y: number };
 }
 
-/** Plaintext contents of `data/gallery/<digest>.json.enc`, post-decrypt. */
-export interface GalleryPayload {
+/** Plaintext contents of `data/gallery/<digest>/index.json.enc`. */
+export interface GalleryIndexPayload {
   title?: string;
   note?: string;
   entries: GalleryEntry[];
+}
+
+/** Plaintext contents of `data/gallery/<digest>/<i>.json.enc` — one person's
+ *  full spirit-animal card, fetched only when their polaroid is tapped.
+ *
+ *  `i` indexes into `GalleryIndexPayload.entries`: it's a position on the
+ *  wall, never a colleague id. Song/fragment fields are stripped at encrypt
+ *  time — the wall has no audio engine. */
+export interface GalleryCardPayload {
+  slide: SpiritAnimalSlide;
 }
 
 export interface AppMeta {

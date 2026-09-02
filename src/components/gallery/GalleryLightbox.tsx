@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import type { GalleryEntry } from '../../types';
+import type { SpiritAnimalSlide } from '../../types';
 import { saveCardAsPng } from '../../utils/wrapped';
 import { showToast } from '../../store/toastStore';
 import { SpiritAnimalCard } from '../slides/SpiritAnimalCard';
@@ -10,6 +10,10 @@ import { SpiritAnimalCard } from '../slides/SpiritAnimalCard';
  * Renders the same <SpiritAnimalCard> the player does, so what someone sees on
  * the wall is literally their deck's card and not a lookalike. Dismiss by
  * dragging down (the mosaic lightbox's gesture), tapping the scrim, or Escape.
+ *
+ * Opens before the card exists: the wall only holds cover images up front, so
+ * `slide` arrives once that person's blob is fetched and decrypted. Some are
+ * 25 MB, so the wait is real and gets a spinner rather than a frozen tap.
  */
 
 const DISMISS_PX = 110;
@@ -24,11 +28,15 @@ const SAVE_LABEL: Record<SaveState, string> = {
 };
 
 interface Props {
-  entry: GalleryEntry;
+  /** Known from the index, so the card can be titled while it loads. */
+  name: string;
+  /** null while the card is still in flight. */
+  slide: SpiritAnimalSlide | null;
+  failed?: boolean;
   onClose: () => void;
 }
 
-export function GalleryLightbox({ entry, onClose }: Props) {
+export function GalleryLightbox({ name, slide, failed, onClose }: Props) {
   const cardRef = useRef<HTMLDivElement>(null);
   const [saveState, setSaveState] = useState<SaveState>('idle');
   const [dragY, setDragY] = useState(0);
@@ -52,7 +60,7 @@ export function GalleryLightbox({ entry, onClose }: Props) {
     if (!cardRef.current || saveState === 'saving') return;
     setSaveState('saving');
     try {
-      await saveCardAsPng(cardRef.current, entry.name || 'cat', 'spirit-animal');
+      await saveCardAsPng(cardRef.current, name || 'cat', 'spirit-animal');
       setSaveState('saved');
       setTimeout(() => setSaveState('idle'), 2000);
     } catch (err) {
@@ -92,16 +100,31 @@ export function GalleryLightbox({ entry, onClose }: Props) {
           startYRef.current = null;
         }}
       >
-        <SpiritAnimalCard slide={entry.slide} cardRef={cardRef} />
+        {slide ? (
+          <SpiritAnimalCard slide={slide} cardRef={cardRef} />
+        ) : (
+          <div className="wall-card-placeholder">
+            {failed ? (
+              <p>Couldn't load this one — tap to close and try again.</p>
+            ) : (
+              <>
+                <span className="wall-card-spinner" aria-hidden="true" />
+                <p>{name}</p>
+              </>
+            )}
+          </div>
+        )}
 
         <div className="wall-lightbox-actions" data-html-to-image-ignore>
-          <button
-            className="keepsake-save"
-            onClick={() => void handleSave()}
-            disabled={saveState === 'saving'}
-          >
-            {SAVE_LABEL[saveState]}
-          </button>
+          {slide && (
+            <button
+              className="keepsake-save"
+              onClick={() => void handleSave()}
+              disabled={saveState === 'saving'}
+            >
+              {SAVE_LABEL[saveState]}
+            </button>
+          )}
           <button className="wall-lightbox-close" onClick={onClose}>
             Close
           </button>

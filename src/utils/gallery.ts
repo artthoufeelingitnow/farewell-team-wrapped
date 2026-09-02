@@ -10,8 +10,15 @@ import type { Colleague, GalleryEntry, SpiritAnimalSlide } from '../types';
  * editing someone's spirit-animal slide updates their polaroid on the next
  * export.
  *
- * `buildGalleryEntries` runs in two places and MUST agree with the mirrored
- * copy in scripts/encrypt-data.mjs:
+ * The wall ships as an index plus one blob per person, NOT as a single file:
+ * covers are small, but the other half of a card is routinely a multi-MB GIF,
+ * and bundling all of them made the first paint a 107 MB download (and blew
+ * past GitHub's 100 MB file limit). `buildWallPeople` is the single ordered
+ * list both halves derive from, so an index entry and a card blob can't fall
+ * out of step.
+ *
+ * These builders run in two places and MUST agree with the mirrored copies in
+ * scripts/encrypt-data.mjs:
  *   - here, for admin's live preview off the local IndexedDB draft
  *   - there, for what actually gets encrypted and shipped
  * If they diverge, the wall you preview stops matching the wall you send.
@@ -59,21 +66,36 @@ export function isWallReady(c: Colleague): boolean {
   return !!c.inGallery && !!c.name?.trim() && !!findSpiritAnimalSlide(c);
 }
 
-/** Everyone opted in, in admin order. */
-export function buildGalleryEntries(colleagues: Colleague[]): GalleryEntry[] {
-  const entries: GalleryEntry[] = [];
+/** Everyone publishable to the wall, in admin order. The ORDER is the
+ *  contract: a person's position here is the `<i>` their card blob is named
+ *  after, and the index into the rendered wall. */
+export function buildWallPeople(
+  colleagues: Colleague[],
+): { name: string; slide: SpiritAnimalSlide; cover: 'left' | 'right' }[] {
+  const out: { name: string; slide: SpiritAnimalSlide; cover: 'left' | 'right' }[] = [];
   for (const c of colleagues) {
     const slide = findSpiritAnimalSlide(c);
     if (!c.inGallery || !c.name?.trim() || !slide) continue;
-    entries.push({
+    out.push({
       name: c.name,
-      cover: c.galleryCover === 'right' ? 'right' : 'left',
       slide: galleryCardFromSlide(slide),
+      cover: c.galleryCover === 'right' ? 'right' : 'left',
     });
     // No id — see the GalleryEntry doc comment. The wall goes to a group, and
     // an id in it would leak which of them also has a private deck.
   }
-  return entries;
+  return out;
+}
+
+/** The lightweight half: names + cover images only. */
+export function buildGalleryEntries(colleagues: Colleague[]): GalleryEntry[] {
+  return buildWallPeople(colleagues).map(({ name, slide, cover }) => {
+    const section = cover === 'right' ? slide.right : slide.left;
+    const entry: GalleryEntry = { name };
+    if (section?.media) entry.cover = section.media;
+    if (section?.mediaPosition) entry.coverPosition = section.mediaPosition;
+    return entry;
+  });
 }
 
 /** Stable 32-bit hash. Same string always gives the same number, so a
