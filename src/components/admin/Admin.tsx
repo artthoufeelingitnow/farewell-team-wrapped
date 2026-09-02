@@ -1,12 +1,13 @@
 import { useRef, useState } from 'react';
 import { useAppStore } from '../../store/appStore';
-import { uid, cleanColleagueForExport } from '../../utils';
+import { uid, cleanColleagueForExport, makeDefaultSlide } from '../../utils';
 import { showToast } from '../../store/toastStore';
 import { useHashRoute } from '../../hooks/useHashRoute';
 import { ColleagueList } from './ColleagueList';
 import { ColleagueEditor } from './ColleagueEditor';
 import { MetaEditor } from './MetaEditor';
-import type { AppData } from '../../types';
+import { GalleryEditor } from './GalleryEditor';
+import type { AppData, Colleague } from '../../types';
 
 export function Admin() {
   const data = useAppStore((s) => s.data);
@@ -19,11 +20,27 @@ export function Admin() {
 
   const [selectedId, setSelectedId] = useState<string | null>(colleagues[0]?.id ?? null);
   const [metaOpen, setMetaOpen] = useState(false);
+  const [galleryOpen, setGalleryOpen] = useState(false);
 
   const selected = colleagues.find((c) => c.id === selectedId) ?? null;
 
   const handleAddColleague = () => {
     const newCol = { id: uid(), name: '', slides: [] };
+    addColleague(newCol);
+    setSelectedId(newCol.id);
+  };
+
+  /** Someone who gets a polaroid but no deck. Starts pre-wired for the wall
+   *  and pre-seeded with the one slide the wall reads, so the only thing left
+   *  to do is name them and drop in the cat. */
+  const handleAddWallOnly = () => {
+    const newCol: Colleague = {
+      id: uid(),
+      name: '',
+      slides: [makeDefaultSlide('spirit-animal', '')],
+      galleryOnly: true,
+      inGallery: true,
+    };
     addColleague(newCol);
     setSelectedId(newCol.id);
   };
@@ -64,7 +81,12 @@ export function Admin() {
   };
 
   const handleExport = () => {
-    const missingPw = colleagues.filter((c) => c.slides.length > 0 && !c.password);
+    // Wall-only people are *expected* to have no password — they have no deck
+    // to encrypt — so warning about them every export would train you to click
+    // through the warning that matters.
+    const missingPw = colleagues.filter(
+      (c) => c.slides.length > 0 && !c.password && !c.galleryOnly,
+    );
     if (missingPw.length > 0) {
       const names = missingPw.map((c) => c.name || c.id).join(', ');
       if (!confirm(
@@ -73,9 +95,19 @@ export function Admin() {
         return;
       }
     }
+    if (colleagues.some((c) => c.inGallery) && !data.gallery?.token) {
+      if (
+        !confirm(
+          'People are marked for the polaroid wall, but the wall has no link yet, so it won\'t be published.\n\nGenerate one under "Polaroid wall" first — or export anyway?',
+        )
+      ) {
+        return;
+      }
+    }
     const cleanData = {
       meta: data.meta,
       colleagues: colleagues.map(cleanColleagueForExport),
+      ...(data.gallery ? { gallery: data.gallery } : {}),
     };
     const blob = new Blob([JSON.stringify(cleanData, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
@@ -96,6 +128,9 @@ export function Admin() {
             <div className="tools">
               <button className="btn btn-sm btn-ghost" onClick={() => setMetaOpen(true)}>
                 Site title & footer
+              </button>
+              <button className="btn btn-sm btn-ghost" onClick={() => setGalleryOpen(true)}>
+                Polaroid wall
               </button>
               <button className="btn btn-sm btn-ghost" onClick={handleExport}>
                 Export final file
@@ -134,6 +169,7 @@ export function Admin() {
               selectedId={selectedId}
               onSelect={setSelectedId}
               onAdd={handleAddColleague}
+              onAddWallOnly={handleAddWallOnly}
             />
 
             <div className="editor">
@@ -151,6 +187,7 @@ export function Admin() {
       </div>
 
       {metaOpen && <MetaEditor onClose={() => setMetaOpen(false)} />}
+      {galleryOpen && <GalleryEditor onClose={() => setGalleryOpen(false)} />}
     </>
   );
 }

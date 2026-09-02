@@ -139,6 +139,9 @@ export function cleanColleagueForExport(c: Colleague): Colleague {
   if (c.password) out.password = c.password;
   if (c.category) out.category = c.category;
   if (c.hidden) out.hidden = true;
+  if (c.inGallery) out.inGallery = true;
+  if (c.galleryCover) out.galleryCover = c.galleryCover;
+  if (c.galleryOnly) out.galleryOnly = true;
   return out;
 }
 
@@ -306,10 +309,14 @@ const SONG_FIELD_KEYS = ['songUrl', 'songName', 'songArtist', 'songArt', 'songSt
 
 export function migrateAppData(data: AppData | undefined | null): AppData {
   const safe = (data ?? {}) as Partial<AppData>;
-  return {
+  const out: AppData = {
     meta: safe.meta ?? { title: 'For You', subtitle: '', farewellNote: '' },
     colleagues: (safe.colleagues ?? []).map((c) => migrateColleague(c)),
   };
+  // Wall config predates nothing — it's simply absent on older drafts, and an
+  // absent wall is a valid state (no token = no wall published).
+  if (safe.gallery && typeof safe.gallery === 'object') out.gallery = safe.gallery;
+  return out;
 }
 
 /** Migrates one colleague + their slides. Handles two slide-type-level
@@ -394,5 +401,9 @@ function migrateColleague(c: Colleague): Colleague {
   // password" warning until the user re-enters it.
   if (typeof raw.password === 'string' && raw.password) out.password = raw.password;
   if (raw.hidden === true) out.hidden = true;
+  if (raw.inGallery === true) out.inGallery = true;
+  if (raw.galleryCover === 'right') out.galleryCover = 'right';
+  else if (raw.galleryCover === 'left') out.galleryCover = 'left';
+  if (raw.galleryOnly === true) out.galleryOnly = true;
   return out;
 }

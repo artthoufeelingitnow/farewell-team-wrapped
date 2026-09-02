@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { useAppStore } from '../../store/appStore';
 import { usePlayerStore } from '../../store/playerStore';
-import type { Colleague, ColleagueCategory, Slide, SlideType } from '../../types';
+import type { Colleague, ColleagueCategory, GallerySide, Slide, SlideType } from '../../types';
 import { makeDefaultSlide } from '../../utils';
+import { findSpiritAnimalSlide } from '../../utils/gallery';
 import { deckUrl } from '../../utils/links';
 import { showToast } from '../../store/toastStore';
 import { SlideEditor } from './SlideEditor';
@@ -36,6 +37,10 @@ export function ColleagueEditor({ colleague }: Props) {
   const [showAddSlide, setShowAddSlide] = useState(false);
 
   const slides = colleague.slides ?? [];
+  const isWallOnly = !!colleague.galleryOnly;
+  // The wall reads this slide and nothing else, so flag its absence right where
+  // the wall toggle lives rather than letting it fail silently at export.
+  const hasSpiritSlide = !!findSpiritAnimalSlide(colleague);
 
   // Scroll the AddSlideMenu into view as soon as it opens (clicking + Add slide).
   useEffect(() => {
@@ -95,52 +100,104 @@ export function ColleagueEditor({ colleague }: Props) {
             />
           </div>
           <div>
-            <label className="field-label">
-              Password {colleague.password ? '(set ✓)' : '(needed for encryption)'}
-            </label>
-            <input
-              type="text"
-              className="field-input"
-              value={colleague.password ?? ''}
-              placeholder="Plaintext — used as the AES-GCM key"
-              onChange={(e) => updateColleague(colleague.id, { password: e.target.value })}
-            />
-          </div>
-          <div>
-            <label className="field-label">Category</label>
+            <label className="field-label">Type</label>
             <select
               className="field-select"
-              value={colleague.category ?? 'trainer'}
+              value={isWallOnly ? 'wall' : 'deck'}
               onChange={(e) =>
-                updateColleague(colleague.id, {
-                  category: e.target.value as ColleagueCategory,
-                })
+                updateColleague(colleague.id, { galleryOnly: e.target.value === 'wall' })
               }
             >
-              <option value="trainer">Trainer</option>
-              <option value="yfa">YFA</option>
+              <option value="deck">Full wrapped deck</option>
+              <option value="wall">Wall only — no deck</option>
             </select>
           </div>
+          {!isWallOnly && (
+            <>
+              <div>
+                <label className="field-label">
+                  Password {colleague.password ? '(set ✓)' : '(needed for encryption)'}
+                </label>
+                <input
+                  type="text"
+                  className="field-input"
+                  value={colleague.password ?? ''}
+                  placeholder="Plaintext — used as the AES-GCM key"
+                  onChange={(e) => updateColleague(colleague.id, { password: e.target.value })}
+                />
+              </div>
+              <div>
+                <label className="field-label">Category</label>
+                <select
+                  className="field-select"
+                  value={colleague.category ?? 'trainer'}
+                  onChange={(e) =>
+                    updateColleague(colleague.id, {
+                      category: e.target.value as ColleagueCategory,
+                    })
+                  }
+                >
+                  <option value="trainer">Trainer</option>
+                  <option value="yfa">YFA</option>
+                </select>
+              </div>
+              <div>
+                <label className="field-label">Link status</label>
+                <select
+                  className="field-select"
+                  value={colleague.hidden ? 'hidden' : 'visible'}
+                  onChange={(e) =>
+                    updateColleague(colleague.id, {
+                      hidden: e.target.value === 'hidden',
+                    })
+                  }
+                >
+                  <option value="visible">Live — deck gets published</option>
+                  <option value="hidden">Paused — no blob, link 404s</option>
+                </select>
+              </div>
+            </>
+          )}
           <div>
-            <label className="field-label">Link status</label>
+            <label className="field-label">Polaroid wall</label>
             <select
               className="field-select"
-              value={colleague.hidden ? 'hidden' : 'visible'}
-              onChange={(e) =>
-                updateColleague(colleague.id, {
-                  hidden: e.target.value === 'hidden',
-                })
-              }
+              value={colleague.inGallery ? 'on' : 'off'}
+              onChange={(e) => updateColleague(colleague.id, { inGallery: e.target.value === 'on' })}
             >
-              <option value="visible">Live — deck gets published</option>
-              <option value="hidden">Paused — no blob, link 404s</option>
+              <option value="off">Not on the wall</option>
+              <option value="on">Featured on the wall</option>
             </select>
           </div>
+          {colleague.inGallery && (
+            <div>
+              <label className="field-label">Polaroid shows</label>
+              <select
+                className="field-select"
+                value={colleague.galleryCover ?? 'left'}
+                onChange={(e) =>
+                  updateColleague(colleague.id, { galleryCover: e.target.value as GallerySide })
+                }
+              >
+                <option value="left">Left image</option>
+                <option value="right">Right image</option>
+              </select>
+            </div>
+          )}
         </div>
 
+        {colleague.inGallery && !hasSpiritSlide && (
+          <p className="field-hint field-hint-warn">
+            ⚠️ Featured on the wall, but there's no spirit-animal slide to show — add one below or
+            they'll be skipped at export.
+          </p>
+        )}
+
         {/* The only way into this deck. There's no public roster, so this link
-            plus the password above is what you send — nothing else works. */}
-        <div className="deck-link-row">
+            plus the password above is what you send — nothing else works.
+            Wall-only people have no deck, so no link either — theirs is the
+            one shared wall link under "Polaroid wall". */}
+        <div className="deck-link-row" hidden={isWallOnly}>
           <label className="field-label">Private link</label>
           <code className="deck-link">{deckUrl(colleague.id)}</code>
           <div className="deck-link-actions">

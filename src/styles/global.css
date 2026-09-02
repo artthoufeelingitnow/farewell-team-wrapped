@@ -4,6 +4,10 @@
     /* Geometric bold sans for "Spotify Wrapped" styled titles. Montserrat 900
        is closest to Circular without paying for the real thing. */
     --font-spotify: 'Montserrat', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+    /* Handwriting for the white strip under a polaroid — the wall's whole
+       conceit is a physical object, and a geometric sans on that strip reads
+       as a caption instead of someone's biro. */
+    --font-hand: 'Caveat', 'Bradley Hand', cursive;
     /* The accent already used for focus rings and admin highlights. */
     --gold: #FFC75F;
     --gold-dim: rgba(255, 199, 95, 0.45);
@@ -2582,4 +2586,421 @@
     letter-spacing: 1px;
     color: rgba(255, 255, 255, 0.35);
     padding: 6px 8px 2px;
+  }
+
+  /* ============================================================
+     THE POLAROID WALL — #/w/<token>
+
+     A shared page, one link, no password box. Everything here is trying to
+     read as a physical thing hung on a wall rather than a grid of cards:
+     twine that sags under its own weight, photos pegged on at a slight tilt,
+     handwriting on the white strip, and a real shadow underneath.
+
+     Deliberately NOT the deck palette. The wrapped decks are vivid gradients;
+     the wall is a quiet, warm room, so the cats carry the colour.
+     ============================================================ */
+  .wall {
+    --wall-paper: #f4efe6;
+    --wall-ink: #2f2a24;
+    --twine: #c2ac8d;
+    --pin-wood: #d9b681;
+    --pin-wood-dark: #b08e5c;
+
+    position: relative;
+    min-height: 100vh;
+    padding: 26px 18px 60px;
+    background:
+      radial-gradient(ellipse at 50% 0%, rgba(255, 255, 255, 0.65), transparent 62%),
+      linear-gradient(178deg, #f7f2ea 0%, var(--wall-paper) 55%, #ece4d7 100%);
+    color: var(--wall-ink);
+    overflow-x: hidden;
+  }
+  .wall-centered {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  /* --- Header: a branch with the title hanging off it (ref image 4) --- */
+  .wall-header {
+    max-width: 640px;
+    margin: 0 auto 34px;
+    text-align: center;
+  }
+  .wall-branch {
+    color: #8a6a45;
+    opacity: 0.9;
+    filter: drop-shadow(0 3px 4px rgba(0, 0, 0, 0.12));
+  }
+  .wall-branch svg {
+    display: block;
+    width: 100%;
+    height: 18px;
+  }
+  /* The two strands the title dangles from. */
+  .wall-hang {
+    display: flex;
+    justify-content: center;
+    gap: 108px;
+    height: 26px;
+  }
+  .wall-hang span {
+    width: 1px;
+    background: linear-gradient(180deg, var(--twine), rgba(194, 172, 141, 0.15));
+  }
+  .wall-title {
+    font-family: var(--font-display);
+    font-size: clamp(28px, 7vw, 44px);
+    font-weight: 400;
+    line-height: 1.1;
+    color: #3b332a;
+  }
+  .wall-note {
+    margin-top: 8px;
+    font-family: var(--font-hand);
+    font-size: clamp(17px, 4vw, 21px);
+    color: rgba(47, 42, 36, 0.62);
+  }
+
+  /* --- Rows of hanging photos --- */
+  .wall-rows {
+    max-width: 1000px;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: clamp(30px, 6vw, 54px);
+  }
+  .wall-row {
+    position: relative;
+    padding-top: 22px;
+  }
+  /* Tacks holding each end of the string to the wall. */
+  .wall-row::before,
+  .wall-row::after {
+    content: '';
+    position: absolute;
+    top: 1px;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 35% 30%, #f2e8d8, #a08a66 72%);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.28);
+  }
+  .wall-row::before { left: -3px; }
+  .wall-row::after { right: -3px; }
+
+  /* The string. `preserveAspectRatio: none` lets one curve stretch to any row
+     width; `non-scaling-stroke` (set on the path) stops the twine going thin
+     as it stretches. */
+  .wall-twine {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 60px;
+    color: var(--twine);
+    overflow: visible;
+    pointer-events: none;
+  }
+  .wall-row-items {
+    position: relative;
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    gap: clamp(10px, 3.2vw, 32px);
+  }
+
+  /* --- One polaroid --- */
+  .polaroid {
+    --tilt: 0deg;
+    --drop: 0px;
+    position: relative;
+    flex: 0 0 auto;
+    width: clamp(104px, 21vw, 158px);
+    padding: 8px 8px 30px;
+    background: linear-gradient(170deg, #fffdf9 0%, #f6f1e7 100%);
+    border: none;
+    border-radius: 3px;
+    cursor: pointer;
+    /* Hangs from its peg, so it swings about the top-centre rather than its
+       middle — that's also what keeps the pin sitting still on the string. */
+    transform-origin: 50% 0;
+    transform: translateY(var(--drop)) rotate(var(--tilt));
+    box-shadow:
+      0 7px 16px rgba(60, 44, 24, 0.18),
+      0 1px 3px rgba(60, 44, 24, 0.14);
+    transition: transform 0.28s cubic-bezier(0.2, 0.8, 0.3, 1), box-shadow 0.28s ease;
+    -webkit-tap-highlight-color: transparent;
+  }
+  /* Lifting it off the wall to look closer: straightens and rises. Zeroing the
+     custom property (rather than the transform) means the clothespin, which
+     counter-rotates by the same variable, straightens with it for free. */
+  .polaroid:hover,
+  .polaroid:focus-visible {
+    --tilt: 0deg;
+    transform: translateY(calc(var(--drop) - 6px)) scale(1.05);
+    box-shadow:
+      0 16px 30px rgba(60, 44, 24, 0.26),
+      0 2px 6px rgba(60, 44, 24, 0.16);
+    z-index: 3;
+  }
+  .polaroid:focus-visible {
+    outline: 2px solid #8a6a45;
+    outline-offset: 3px;
+  }
+  .polaroid:active {
+    transform: translateY(calc(var(--drop) - 2px)) scale(1.01);
+  }
+
+  /* Mini wooden clothespin straddling the string. */
+  /* Sits so the twine crosses its upper third, then overlaps the photo's top
+     edge by ~10px — the geometry an actual peg has. `top` is derived from the
+     row's 22px padding and the string's y=5: -(22 - 5 + 9). */
+  .polaroid-pin {
+    position: absolute;
+    top: -26px;
+    left: 50%;
+    width: 13px;
+    height: 36px;
+    border-radius: 3px;
+    background: linear-gradient(95deg, var(--pin-wood) 0%, #eccb9c 42%, var(--pin-wood-dark) 100%);
+    box-shadow: 0 2px 4px rgba(60, 44, 24, 0.32);
+    transform: translateX(-50%) rotate(calc(-1 * var(--tilt)));
+    transition: transform 0.28s cubic-bezier(0.2, 0.8, 0.3, 1);
+  }
+  /* The spring band. */
+  .polaroid-pin::before {
+    content: '';
+    position: absolute;
+    top: 17px;
+    left: -1px;
+    right: -1px;
+    height: 3px;
+    background: linear-gradient(180deg, #cfcfcf, #9a9a9a);
+    border-radius: 1px;
+  }
+  /* The seam between the two wooden halves. */
+  .polaroid-pin::after {
+    content: '';
+    position: absolute;
+    top: 3px;
+    bottom: 3px;
+    left: 50%;
+    width: 1px;
+    background: rgba(120, 90, 55, 0.35);
+  }
+
+  .polaroid-photo {
+    display: block;
+    width: 100%;
+    aspect-ratio: 1;
+    overflow: hidden;
+    background: #e8e0d2;
+    box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.06);
+  }
+  .polaroid-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-user-drag: none;
+    -webkit-touch-callout: none;
+  }
+  .polaroid-empty {
+    display: flex;
+    width: 100%;
+    height: 100%;
+    align-items: center;
+    justify-content: center;
+    font-size: 26px;
+    color: rgba(47, 42, 36, 0.22);
+  }
+  /* The handwritten strip along the bottom. */
+  .polaroid-label {
+    position: absolute;
+    left: 8px;
+    right: 8px;
+    bottom: 5px;
+    font-family: var(--font-hand);
+    font-size: clamp(15px, 3.6vw, 19px);
+    line-height: 1.15;
+    color: #43506b;
+    text-align: center;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .wall-footer {
+    margin-top: 54px;
+    text-align: center;
+    font-family: var(--font-hand);
+    font-size: 18px;
+    color: rgba(47, 42, 36, 0.4);
+  }
+
+  /* --- Loading + empty/error states --- */
+  .wall-developing {
+    text-align: center;
+    color: rgba(47, 42, 36, 0.55);
+  }
+  /* A blank polaroid slowly coming up, like one that's still developing. */
+  .wall-developing-frame {
+    width: 128px;
+    height: 148px;
+    margin: 0 auto 16px;
+    background: linear-gradient(170deg, #fffdf9, #f6f1e7);
+    box-shadow: 0 7px 16px rgba(60, 44, 24, 0.18);
+    position: relative;
+  }
+  .wall-developing-frame::after {
+    content: '';
+    position: absolute;
+    inset: 8px 8px 30px;
+    background: #cfc4b2;
+    animation: wall-develop 1.9s ease-in-out infinite;
+  }
+  @keyframes wall-develop {
+    0%, 100% { opacity: 0.35; }
+    50% { opacity: 0.9; }
+  }
+  .wall-developing p {
+    font-family: var(--font-hand);
+    font-size: 20px;
+  }
+  .wall-message {
+    max-width: 420px;
+    margin: 40px auto;
+    text-align: center;
+    color: rgba(47, 42, 36, 0.7);
+  }
+  .wall-message h3 {
+    font-family: var(--font-display);
+    font-size: 24px;
+    font-weight: 400;
+    margin-bottom: 8px;
+    color: #3b332a;
+  }
+  .wall-message p {
+    font-size: 14px;
+    line-height: 1.5;
+  }
+
+  /* --- Lightbox: the polaroid opened up into its full card --- */
+  .wall-lightbox {
+    position: fixed;
+    inset: 0;
+    z-index: 60;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    background: rgba(20, 16, 12, 0.82);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    animation: wall-lightbox-in 0.22s ease;
+  }
+  @keyframes wall-lightbox-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+  .wall-lightbox-inner {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+    max-height: 100%;
+    touch-action: pan-y;
+  }
+  /* Size from the height so a short viewport shrinks the card instead of
+     cropping it; max-width takes over on a narrow one. */
+  .wall-lightbox .keepsake-card {
+    height: min(70vh, 620px);
+    width: auto;
+    max-width: calc(100vw - 40px);
+    animation: wall-card-in 0.28s cubic-bezier(0.2, 0.8, 0.3, 1);
+  }
+  @keyframes wall-card-in {
+    from { opacity: 0; transform: scale(0.94) translateY(10px); }
+    to { opacity: 1; transform: none; }
+  }
+  .wall-lightbox-actions {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+  .wall-lightbox-close {
+    padding: 11px 20px;
+    border-radius: 999px;
+    border: 1.5px solid rgba(255, 255, 255, 0.3);
+    background: transparent;
+    color: rgba(255, 255, 255, 0.85);
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background 0.15s ease, border-color 0.15s ease;
+  }
+  .wall-lightbox-close:hover {
+    background: rgba(255, 255, 255, 0.12);
+    border-color: rgba(255, 255, 255, 0.5);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .polaroid,
+    .polaroid-pin,
+    .wall-lightbox,
+    .wall-lightbox .keepsake-card {
+      transition: none;
+      animation: none;
+    }
+  }
+
+  /* ============================================================
+     ADMIN — polaroid wall controls
+     ============================================================ */
+  .field-hint {
+    font-size: 12px;
+    line-height: 1.45;
+    color: rgba(255, 255, 255, 0.5);
+    margin: 6px 0;
+  }
+  .field-hint-warn {
+    color: #FFC75F;
+  }
+  .col-item-wall {
+    opacity: 0.75;
+    font-size: 11px;
+  }
+  .add-colleague-btn-alt {
+    margin-top: 6px;
+    opacity: 0.75;
+    font-size: 12px;
+  }
+  .wall-roster {
+    margin-top: 18px;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    padding-top: 14px;
+  }
+  .wall-roster ul {
+    list-style: none;
+    max-height: 190px;
+    overflow-y: auto;
+  }
+  .wall-roster li {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 12px;
+    padding: 5px 0;
+    font-size: 13px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  }
+  .wall-roster li .meta {
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.4);
+    white-space: nowrap;
   }

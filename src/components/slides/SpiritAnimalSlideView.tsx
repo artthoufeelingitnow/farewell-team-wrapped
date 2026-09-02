@@ -1,7 +1,8 @@
 import { useRef, useState } from 'react';
-import type { Colleague, SpiritAnimalSlide, SpiritAnimalSection, MediaItem } from '../../types';
+import type { Colleague, SpiritAnimalSlide } from '../../types';
 import { saveCardAsPng } from '../../utils/wrapped';
 import { showToast } from '../../store/toastStore';
+import { SpiritAnimalCard } from './SpiritAnimalCard';
 
 interface Props {
   slide: SpiritAnimalSlide;
@@ -21,10 +22,6 @@ export function SpiritAnimalSlideView({ slide, colleague }: Props) {
   const cardRef = useRef<HTMLDivElement>(null);
   const [saveState, setSaveState] = useState<SaveState>('idle');
 
-  const eyebrow = slide.eyebrow?.trim() || 'this is you if you were a cat...';
-  const title = slide.title?.trim() ? slide.title : '';
-  const titleClass = `keepsake-title${slide.titleFont === 'spotify' ? ' font-spotify' : ''}`;
-
   const handleSave = async () => {
     if (!cardRef.current || saveState === 'saving') return;
     setSaveState('saving');
@@ -42,22 +39,7 @@ export function SpiritAnimalSlideView({ slide, colleague }: Props) {
 
   return (
     <div className="keepsake">
-      <div className="keepsake-card keepsake-card-spirit-animal" ref={cardRef}>
-        {eyebrow && <div className="keepsake-eyebrow">{eyebrow}</div>}
-        {title && <div className={titleClass}>{title}</div>}
-
-        <div className="spirit-sections">
-          <Section section={slide.left} side="left" />
-          <Section section={slide.right} side="right" />
-        </div>
-
-        {slide.tagline && (
-          <div className="keepsake-tagline">{slide.tagline}</div>
-        )}
-        {slide.caption && (
-          <div className="keepsake-caption">{slide.caption}</div>
-        )}
-      </div>
+      <SpiritAnimalCard slide={slide} cardRef={cardRef} />
 
       <div className="keepsake-actions" data-html-to-image-ignore>
         <button
@@ -69,51 +51,5 @@ export function SpiritAnimalSlideView({ slide, colleague }: Props) {
         </button>
       </div>
     </div>
-  );
-}
-
-function Section({ section, side }: { section: SpiritAnimalSection | undefined; side: 'left' | 'right' }) {
-  const media = section?.media;
-  const pos = section?.mediaPosition ?? { x: 50, y: 50 };
-  const objectPosition = `${pos.x}% ${pos.y}%`;
-
-  return (
-    <div className={`spirit-section spirit-section-${side}`}>
-      <div className="spirit-section-media">
-        {media ? (
-          <SectionMedia media={media} objectPosition={objectPosition} />
-        ) : (
-          <div className="spirit-section-empty" aria-hidden="true">
-            <span>★</span>
-          </div>
-        )}
-      </div>
-      {section?.caption && <div className="spirit-section-caption">{section.caption}</div>}
-    </div>
-  );
-}
-
-function SectionMedia({ media, objectPosition }: { media: MediaItem; objectPosition: string }) {
-  if (media.kind === 'video') {
-    return (
-      <video
-        className="spirit-section-img"
-        src={media.src}
-        autoPlay
-        muted
-        loop
-        playsInline
-        crossOrigin="anonymous"
-        style={{ objectPosition }}
-      />
-    );
-  }
-  return (
-    <img
-      className="spirit-section-img"
-      src={media.src}
-      alt=""
-      style={{ objectPosition }}
-    />
   );
 }

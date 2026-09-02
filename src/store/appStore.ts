@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { AppData, AppDataIndex, Colleague, Slide } from '../types';
+import type { AppData, AppDataIndex, Colleague, GalleryConfig, Slide } from '../types';
 import { migrateAppData } from '../utils';
 import {
   clearAll,
@@ -30,6 +30,7 @@ const persistMeta = (data: AppData) =>
   saveMeta(
     data.meta,
     data.colleagues.map((c) => c.id),
+    data.gallery,
   ).catch(reportPersistError);
 
 interface AppState {
@@ -42,6 +43,9 @@ interface AppState {
 
   // mutations — each persists automatically (fire-and-forget)
   setMeta: (meta: Partial<AppData['meta']>) => void;
+  /** Patch the polaroid wall's config (token / title / note). Admin-only —
+   *  the token is a credential and never leaves `data.json`. */
+  setGallery: (patch: Partial<GalleryConfig>) => void;
   addColleague: (colleague: Colleague) => void;
   deleteColleague: (id: string) => void;
   updateColleague: (id: string, patch: Partial<Colleague>) => void;
@@ -110,6 +114,12 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   setMeta: (meta) => {
     const next = { ...get().data, meta: { ...get().data.meta, ...meta } };
+    set({ data: next });
+    void persistMeta(next);
+  },
+
+  setGallery: (patch) => {
+    const next = { ...get().data, gallery: { ...get().data.gallery, ...patch } };
     set({ data: next });
     void persistMeta(next);
   },
@@ -206,6 +216,8 @@ export const useAppStore = create<AppState>((set, get) => ({
     // Meta only. The roster is deliberately absent from the public index, so a
     // viewer's store starts with zero colleagues and gains exactly one — their
     // own — after `loadDeck`. Don't persist; viewers shouldn't accumulate state.
+    // No `gallery` either: the wall's token is a credential, so it never ships
+    // in a public file. Viewers get their token from the link they were sent.
     set({ data: { meta: index.meta, colleagues: [] }, isExportedFile: true });
   },
 
